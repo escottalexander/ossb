@@ -1,0 +1,3 @@
+const STATUS_OPTIONS = ['NEW','APPROVED','COMPLETED','CANCELED'];
+
+exports.default = {STATUS_OPTIONS};
