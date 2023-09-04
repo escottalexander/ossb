@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Marquee from "react-fast-marquee";
-import { useAccount } from "wagmi";
+// import { useAccount } from "wagmi";
 import {
   useAnimationConfig,
   useScaffoldContract,
@@ -12,7 +12,7 @@ import {
 const MARQUEE_PERIOD_IN_SEC = 5;
 
 export const ContractData = () => {
-  const { address } = useAccount();
+  // const { address } = useAccount();
   const [transitionEnabled, setTransitionEnabled] = useState(true);
   const [isRightDirection, setIsRightDirection] = useState(false);
   const [marqueeSpeed, setMarqueeSpeed] = useState(0);
@@ -20,23 +20,25 @@ export const ContractData = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const greetingRef = useRef<HTMLDivElement>(null);
 
-  const { data: totalCounter } = useScaffoldContractRead({
-    contractName: "YourContract",
-    functionName: "totalCounter",
+  const { data: getTask } = useScaffoldContractRead({
+    contractName: "PayoutUponCompletion",
+    functionName: "getTask",
+    args: [BigInt(0)],
   });
 
-  const { data: currentGreeting, isLoading: isGreetingLoading } = useScaffoldContractRead({
-    contractName: "YourContract",
-    functionName: "greeting",
+  const { data: getTaskFunding } = useScaffoldContractRead({
+    contractName: "PayoutUponCompletion",
+    functionName: "getTaskFunding",
+    args: [BigInt(0)],
   });
 
   useScaffoldEventSubscriber({
-    contractName: "YourContract",
-    eventName: "GreetingChange",
+    contractName: "PayoutUponCompletion",
+    eventName: "TaskCreated",
     listener: logs => {
       logs.map(log => {
-        const { greetingSetter, value, premium, newGreeting } = log.args;
-        console.log("📡 GreetingChange event", greetingSetter, value, premium, newGreeting);
+        const { index, taskLocation, reviewer } = log.args;
+        console.log("Task Created", index, taskLocation, reviewer);
       });
     },
   });
@@ -46,21 +48,21 @@ export const ContractData = () => {
     isLoading: isLoadingEvents,
     error: errorReadingEvents,
   } = useScaffoldEventHistory({
-    contractName: "YourContract",
-    eventName: "GreetingChange",
+    contractName: "PayoutUponCompletion",
+    eventName: "TaskCreated",
     fromBlock: process.env.NEXT_PUBLIC_DEPLOY_BLOCK ? BigInt(process.env.NEXT_PUBLIC_DEPLOY_BLOCK) : 0n,
-    filters: { greetingSetter: address },
+    // filters: { },
     blockData: true,
   });
 
   console.log("Events:", isLoadingEvents, errorReadingEvents, myGreetingChangeEvents);
 
-  const { data: yourContract } = useScaffoldContract({ contractName: "YourContract" });
+  const { data: yourContract } = useScaffoldContract({ contractName: "PayoutUponCompletion" });
   console.log("yourContract: ", yourContract);
 
-  const { showAnimation } = useAnimationConfig(totalCounter);
+  const { showAnimation } = useAnimationConfig(getTask);
 
-  const showTransition = transitionEnabled && !!currentGreeting && !isGreetingLoading;
+  const showTransition = transitionEnabled;
 
   useEffect(() => {
     if (transitionEnabled && containerRef.current && greetingRef.current) {
@@ -93,7 +95,7 @@ export const ContractData = () => {
           <div className="bg-secondary border border-primary rounded-xl flex">
             <div className="p-2 py-1 border-r border-primary flex items-end">Total count</div>
             <div className="text-4xl text-right min-w-[3rem] px-2 py-1 flex justify-end font-bai-jamjuree">
-              {totalCounter?.toString() || "0"}
+              {JSON.stringify(getTask) || "0"}
             </div>
           </div>
         </div>
@@ -102,7 +104,7 @@ export const ContractData = () => {
           <div className="relative overflow-x-hidden" ref={containerRef}>
             {/* for speed calculating purposes */}
             <div className="absolute -left-[9999rem]" ref={greetingRef}>
-              <div className="px-4">{currentGreeting}</div>
+              <div className="px-4">{JSON.stringify(getTaskFunding)}</div>
             </div>
             {new Array(3).fill("").map((_, i) => {
               const isLineRightDirection = i % 2 ? isRightDirection : !isRightDirection;
@@ -115,7 +117,7 @@ export const ContractData = () => {
                   speed={marqueeSpeed}
                   className={i % 2 ? "-my-10" : ""}
                 >
-                  <div className="px-4">{currentGreeting || " "}</div>
+                  <div className="px-4">{JSON.stringify(getTaskFunding) || " "}</div>
                 </Marquee>
               );
             })}

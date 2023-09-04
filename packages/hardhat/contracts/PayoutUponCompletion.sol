@@ -1,10 +1,10 @@
 //SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity ^0.8.19;
 
 // Use openzeppelin to inherit battle-tested implementations
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * Contract for managing tasks leading to a payout to a particular address when the work has been approved by the approver
@@ -14,7 +14,6 @@ contract PayoutUponCompletion is Ownable {
 	using SafeERC20 for IERC20;
 
 	struct Task {
-		string taskUrl; // Location of task TODO: Does this need to be stored like this? This could just be a uint for an identifier and we can just emit the url when it is created
 		address reviewer; // The one who can determine if this task has been completed, able to set to approved or canceled status
 		uint8 reviewerPercentage; // Percentage of funds that go to reviewer, set at creation, payed out when worker claims funds
 		address approvedWorker; // The worker who is able to claim funds when approved, can be set before or after work is submitted
@@ -32,9 +31,9 @@ contract PayoutUponCompletion is Ownable {
 
 	// State Variables
 	uint8 public protocolTakeRate = 0; // Percentage that protocol takes from every bounty claim
-	uint8 public maxProtocolTakeRate = 50; // Protocol won't be able to take more than this / 1000 of a bounty - 5% at default level
+	uint8 public maxProtocolTakeRate = 50; // Protocol won't be able to take more than this / 1000 of a bounty - 5% at default level - and this can never be modified upwards
 	uint32 public unlockPeriod = 63072000; // Two years in seconds - Anyone can cancel a task after this time period - uint32 maximimum is 136 years
-	address public protocolVault; // Need to review use of vault
+	address public protocolAddress; // Address that can claim funds that were allocated to protocol
 
 	uint public currentTaskIndex;
 	mapping(uint => Task) public tasks;
@@ -42,7 +41,7 @@ contract PayoutUponCompletion is Ownable {
 	mapping(address => uint) totalTokenBalance;
 
 	// Events
-	event TaskCreated (uint indexed index, string taskUrl, address reviewer);
+	event TaskCreated (uint indexed index, string taskLocation, address reviewer);
 	event TaskFunded (uint indexed index, uint amount, address token);
 	event TaskCanceled (uint indexed index);
 	event TaskApproved (uint indexed index, address worker);
@@ -50,30 +49,31 @@ contract PayoutUponCompletion is Ownable {
 	event Withdraw (address indexed receiver, uint amount, address token);
 	event WorkSubmitted (uint indexed index, address worker, string workUrl);
 	event ApprovedWorkerSet (uint indexed index, address worker);
+
 	// Governance Events
 	event TakeRateAdjusted (uint8 takeRate);
 	event MaxTakeRateLowered (uint8 maxTakeRate);
 	event UnlockPeriodAdjusted (uint32 unlockPeriod);
 
 	// Functions
-	constructor(uint8 _protocolTakeRate, address _protocolVault) {
+	constructor(uint8 _protocolTakeRate, address _protocolAddress) {
 		require(_protocolTakeRate <= maxProtocolTakeRate, "Protocol percent exceeds maximum");
-		require(_protocolVault != address(0), "Protocol vault cannot be zero address");
+		require(_protocolAddress != address(0), "Protocol vault cannot be zero address");
 		protocolTakeRate = _protocolTakeRate;	
-		protocolVault = _protocolVault;
+		protocolAddress = _protocolAddress;
 	}
 
 	// Main Workflows
-	function createTask(string memory taskUrl, address reviewer, uint8 reviewerPercentage) external {
+	function createTask(string memory taskLocation, address reviewer, uint8 reviewerPercentage) external {
 		require(reviewer != address(0), "Reviewer address cannot be the zero address");
 		require(reviewerPercentage <= 100, "Reviewer Percentage cannot exceed 100%");
-		_createTask(taskUrl, reviewer, reviewerPercentage);
+		_createTask(taskLocation, reviewer, reviewerPercentage);
 	}
 
-	function createAndFundTask(string memory taskUrl, address reviewer, uint8 reviewerPercentage, uint amount, address token) external payable {
+	function createAndFundTask(string memory taskLocation, address reviewer, uint8 reviewerPercentage, uint amount, address token) external payable {
 		require(reviewer != address(0), "Reviewer address cannot be the zero address");
 		require(reviewerPercentage <= 100, "Reviewer Percentage cannot exceed 100%");
-		uint index = _createTask(taskUrl, reviewer, reviewerPercentage);
+		uint index = _createTask(taskLocation, reviewer, reviewerPercentage);
 		_fundTask(index, amount, token);
 	}
 
@@ -99,10 +99,9 @@ contract PayoutUponCompletion is Ownable {
 		emit Withdraw(msg.sender, amount, tokenAddress);
 	}
 
-	function _createTask(string memory taskUrl, address reviewer, uint8 reviewerPercentage) internal returns (uint idx) {
+	function _createTask(string memory taskLocation, address reviewer, uint8 reviewerPercentage) internal returns (uint idx) {
 		idx = currentTaskIndex;
 		Task storage task = tasks[idx];
-		task.taskUrl = taskUrl;
 		task.reviewer = reviewer;
 		task.reviewerPercentage = reviewerPercentage;
 		task.creationTime = block.timestamp;
@@ -111,7 +110,7 @@ contract PayoutUponCompletion is Ownable {
 		currentTaskIndex ++;
 
 		// Emit event
-		emit TaskCreated(idx, taskUrl, reviewer);
+		emit TaskCreated(idx, taskLocation, reviewer);
 
 		// returning the idx in case other processes need it to further modify the task
 		return idx;
@@ -200,7 +199,7 @@ contract PayoutUponCompletion is Ownable {
 	function _divyUp(uint amount, address token, address reviewer, address worker, uint reviewerPercentage) internal {
 		if (protocolTakeRate > 0) {
 			uint protocolShare = amount * protocolTakeRate / 1000; // By dividing by 1000 this allows us to adjust the take rate to be as granular as 0.1%
-			withdrawableFunds[protocolVault][token] += protocolShare;
+			withdrawableFunds[protocolAddress][token] += protocolShare;
 			amount = amount - protocolShare;
 		}
 		if (reviewerPercentage > 0) {
@@ -236,20 +235,23 @@ contract PayoutUponCompletion is Ownable {
 		return withdrawableFunds[msg.sender][token];
 	}
 
-	function getTask(uint taskIndex) external view returns (string memory, address, uint8, address, address[] memory, address[] memory, uint, bool, bool, bool) {
-		return (tasks[taskIndex].taskUrl, tasks[taskIndex].reviewer, tasks[taskIndex].reviewerPercentage, tasks[taskIndex].approvedWorker, tasks[taskIndex].fundingType, tasks[taskIndex].funderAddresses, tasks[taskIndex].creationTime, tasks[taskIndex].approved, tasks[taskIndex].canceled, tasks[taskIndex].complete);
+	function getTask(uint taskIndex) external view returns (address, uint8, address, address[] memory, address[] memory, uint, bool, bool, bool) {
+		Task storage task = tasks[taskIndex];
+		return (task.reviewer, task.reviewerPercentage, task.approvedWorker, task.fundingType, task.funderAddresses, task.creationTime, task.approved, task.canceled, task.complete);
 	}
 
 	function getTaskFunding(uint taskIndex) external view returns (address[] memory, uint[] memory) {
-		uint[] memory amounts;
-		for (uint h; h < tasks[taskIndex].fundingType.length; h ++) {
-			address token = tasks[taskIndex].fundingType[h];
-			for (uint i; i < tasks[taskIndex].funderAddresses.length; i ++) {
-				address funder = tasks[taskIndex].funderAddresses[i];
-				amounts[h] += tasks[taskIndex].funding[funder][token];
+		require(taskIndex < currentTaskIndex, "Task at that index does not exist");
+		Task storage task = tasks[taskIndex];
+		uint[] memory amounts = new uint[](task.fundingType.length);
+		for (uint h; h < task.fundingType.length; h ++) {
+			address token = task.fundingType[h];
+			for (uint i; i < task.funderAddresses.length; i ++) {
+				address funder = task.funderAddresses[i];
+				amounts[h] += task.funding[funder][token];
 			}
 		}
-		return (tasks[taskIndex].fundingType, amounts);
+		return (task.fundingType, amounts);
 	}
 
 	// Governance
