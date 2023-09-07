@@ -3,7 +3,7 @@
 ### Where you go to get work or get work done.
 
 ## Description
-Task Marketplace is how we envision the future of work. Enabling a global labour market that can satify the needs of businesses as quick and efficiently as possible. People looking for work whether it be supplementary or for their entire living will find no shortage of tasks to complete.
+Task Marketplace is how we envision the future of work. Enabling a global labour market that can satisfy the needs of businesses as quick and efficiently as possible. People looking for work whether it be supplementary or for their entire living will find no shortage of tasks to complete.
 
 ### The problem we are trying to solve
 Work markets are fractured. Fractured by locality. Fractured by funding. Fractured by gatekeepers. 
