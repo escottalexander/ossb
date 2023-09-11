@@ -9,11 +9,11 @@ declare global {
 }
 
 const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable inside .env.local");
+const MONGODB_DATABASE_NAME = process.env.MONGODB_DATABASE_NAME;
+if (!MONGODB_URI || !MONGODB_DATABASE_NAME) {
+  throw new Error("Please define the MONGODB_URI and MONGODB_DATABASE_NAME environment variables inside .env.local");
 }
-const MONGODB_URI_STRING = MONGODB_URI as string;
+const MONGODB_URI_STRING = (MONGODB_URI + MONGODB_DATABASE_NAME) as string;
 /**
  * Global is used here to maintain a cached connection across hot reloads
  * in development. This prevents connections growing exponentially
