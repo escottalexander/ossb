@@ -1,4 +1,5 @@
-import { Dispatch, SetStateAction } from "react";
+import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import { parseUnits } from "viem";
 
 type FundTaskProps = {
   tokenAddress: string;
@@ -23,12 +24,25 @@ export const FundTask = ({
     {
       name: "ETH",
       address: "0x0000000000000000000000000000000000000000",
+      decimals: 18,
     },
     {
       name: "TEST",
       address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      decimals: 18,
     },
   ];
+
+  const [amountInputString, setAmountInputString] = useState("0");
+
+  useEffect(() => {
+    console.log(amountInputString, fundAmount);
+    const selectedAsset = assets.find(i => i.address === tokenAddress);
+    if (!amountInputString || amountInputString.match(/^\d{1,}(\.\d{0,18})?$/)) {
+      //const val = BigInt(parseEther(e.currentTarget.value));
+      setFundAmount(parseUnits(amountInputString, selectedAsset ? selectedAsset.decimals : 18));
+    }
+  }, [amountInputString, fundAmount, setFundAmount, tokenAddress]);
   return (
     <div className="flex flex-col items-center py-10 px-5 sm:px-0 lg:py-auto max-w-[100vw]">
       <div className="flex flex-col items-center py-10 px-5 sm:px-0 lg:py-auto max-w-[100vw]">
@@ -58,10 +72,10 @@ export const FundTask = ({
           </label>
           <input
             type="text"
-            value={fundAmount.toString()}
+            value={amountInputString}
             onChange={e => {
-              const val = BigInt(e.currentTarget.value || "0");
-              setFundAmount(val);
+              const amount = e.currentTarget.value;
+              setAmountInputString(amount);
             }}
             placeholder="Amount to fund task initially"
             className="input input-bordered focus:outline-none w-full max-w-sm rounded-md"

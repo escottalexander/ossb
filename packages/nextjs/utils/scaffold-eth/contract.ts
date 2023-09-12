@@ -145,10 +145,8 @@ export type UseScaffoldWriteConfig<
   onBlockConfirmation?: (txnReceipt: TransactionReceipt) => void;
   blockConfirmations?: number;
 } & IsContractDeclarationMissing<
-  Partial<Omit<UseContractWriteConfig, "value"> & { value: `${number}` }>,
-  (ExtractStateMutability<TContractName, TFunctionName> extends "payable"
-    ? { value: `${number}` }
-    : { value?: never }) & {
+  Partial<Omit<UseContractWriteConfig, "value"> & { value: bigint }>,
+  (ExtractStateMutability<TContractName, TFunctionName> extends "payable" ? { value: bigint } : { value?: never }) & {
     functionName: TFunctionName;
   } & UseScaffoldArgsParam<TContractName, TFunctionName> &
     Omit<UseContractWriteConfig, "chainId" | "abi" | "address" | "functionName" | "args" | "value" | "mode">

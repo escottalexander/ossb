@@ -2,7 +2,8 @@ import { useState } from "react";
 import { DefineTask } from "./steps/DefineTask";
 import { FundTask } from "./steps/FundTask";
 import { Connector, useAccount } from "wagmi";
-import { useScaffoldContractWrite } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldContractWrite } from "~~/hooks/scaffold-eth";
+import { useERC20Write } from "~~/hooks/scaffold-eth/useERC20Write";
 import { notification } from "~~/utils/scaffold-eth";
 
 const zeroAddress = "0x0000000000000000000000000000000000000000";
@@ -32,7 +33,7 @@ export const CreateTask = () => {
   const [taskId, setTaskId] = useState("");
   const [fundingTokenAddress, setFundingTokenAddress] = useState(zeroAddress);
   const [fundAmount, setFundAmount] = useState(BigInt(0));
-
+  const { data: payoutUponCompletionContract } = useDeployedContractInfo("PayoutUponCompletion");
   const { writeAsync: writeCreateTask } = useScaffoldContractWrite({
     contractName: "PayoutUponCompletion",
     functionName: "createTask",
@@ -46,7 +47,16 @@ export const CreateTask = () => {
     contractName: "PayoutUponCompletion",
     functionName: "createAndFundTask",
     args: [taskId, reviewer, reviewerPercentage, fundAmount, fundingTokenAddress],
-    value: (fundingTokenAddress === zeroAddress ? fundAmount.toString() : BigInt(0).toString()) as `${number}`,
+    value: fundingTokenAddress === zeroAddress ? fundAmount : BigInt(0),
+    onBlockConfirmation: txnReceipt => {
+      console.log("📦 Transaction blockHash", txnReceipt.blockHash);
+    },
+  });
+
+  const { writeAsync: writeERC20Approve } = useERC20Write({
+    address: fundingTokenAddress,
+    functionName: "approve",
+    args: [payoutUponCompletionContract?.address, fundAmount],
     onBlockConfirmation: txnReceipt => {
       console.log("📦 Transaction blockHash", txnReceipt.blockHash);
     },
@@ -104,7 +114,8 @@ export const CreateTask = () => {
     if (fundingTokenAddress === zeroAddress) {
       await writeCreateAndFundTask();
     } else {
-      // Approve Token Spend TODO
+      // Approve Token Spend
+      await writeERC20Approve();
       // Then Create Task
       await writeCreateAndFundTask();
     }

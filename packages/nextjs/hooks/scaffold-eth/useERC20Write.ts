@@ -1,34 +1,33 @@
 import { useState } from "react";
-import { Abi, ExtractAbiFunctionNames } from "abitype";
-import { useContractWrite, useNetwork } from "wagmi";
+import { Abi } from "abitype";
+import { TransactionReceipt, parseEther } from "viem";
+import { UseContractWriteConfig, erc20ABI, useContractWrite, useNetwork } from "wagmi";
 import { getParsedError } from "~~/components/scaffold-eth";
-import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
+import { useTransactor } from "~~/hooks/scaffold-eth";
 import { getTargetNetwork, notification } from "~~/utils/scaffold-eth";
-import { ContractAbi, ContractName, UseScaffoldWriteConfig } from "~~/utils/scaffold-eth/contract";
 
 type UpdatedArgs = Parameters<ReturnType<typeof useContractWrite<Abi, string, undefined>>["writeAsync"]>[0];
 
 /**
- * @dev wrapper for wagmi's useContractWrite hook(with config prepared by usePrepareContractWrite hook) which loads in deployed contract abi and address automatically
+ * @dev wrapper for wagmi's useContractWrite hook(with config prepared by usePrepareContractWrite hook) which loads in an ERC20 contract abi
  * @param config - The config settings, including extra wagmi configuration
- * @param config.contractName - deployed contract name
+ * @param config.address - address of the contract
  * @param config.functionName - name of the function to be called
  * @param config.args - arguments for the function
  * @param config.value - value in ETH that will be sent with transaction
  */
-export const useScaffoldContractWrite = <
-  TContractName extends ContractName,
-  TFunctionName extends ExtractAbiFunctionNames<ContractAbi<TContractName>, "nonpayable" | "payable">,
->({
-  contractName,
+export const useERC20Write = ({
+  address,
   functionName,
   args,
   value,
   onBlockConfirmation,
   blockConfirmations,
   ...writeConfig
-}: UseScaffoldWriteConfig<TContractName, TFunctionName>) => {
-  const { data: deployedContractData } = useDeployedContractInfo(contractName);
+}: {
+  onBlockConfirmation?: (txnReceipt: TransactionReceipt) => void;
+  blockConfirmations?: number;
+} & UseContractWriteConfig) => {
   const { chain } = useNetwork();
   const writeTx = useTransactor();
   const [isMining, setIsMining] = useState(false);
@@ -36,11 +35,11 @@ export const useScaffoldContractWrite = <
 
   const wagmiContractWrite = useContractWrite({
     chainId: configuredNetwork.id,
-    address: deployedContractData?.address,
-    abi: deployedContractData?.abi as Abi,
+    address,
+    abi: erc20ABI as Abi,
     functionName: functionName as any,
     args: args as unknown[],
-    value: value ? value : undefined,
+    value: value ? parseEther(value.toString()) : undefined,
     ...writeConfig,
   });
 
@@ -49,13 +48,9 @@ export const useScaffoldContractWrite = <
     value: newValue,
     ...otherConfig
   }: {
-    args?: UseScaffoldWriteConfig<TContractName, TFunctionName>["args"];
-    value?: UseScaffoldWriteConfig<TContractName, TFunctionName>["value"];
+    args?: UseContractWriteConfig["args"];
+    value?: UseContractWriteConfig["value"];
   } & UpdatedArgs = {}) => {
-    if (!deployedContractData) {
-      notification.error("Target Contract is not deployed, did you forget to run `yarn deploy`?");
-      return;
-    }
     if (!chain?.id) {
       notification.error("Please connect your wallet");
       return;
@@ -72,7 +67,7 @@ export const useScaffoldContractWrite = <
           () =>
             wagmiContractWrite.writeAsync({
               args: newArgs ?? args,
-              value: newValue ? newValue : value && value,
+              value: newValue ? parseEther(newValue.toString()) : value && parseEther(value.toString()),
               ...otherConfig,
             }),
           { onBlockConfirmation, blockConfirmations },
