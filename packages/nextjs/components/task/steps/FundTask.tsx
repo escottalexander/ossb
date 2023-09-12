@@ -11,6 +11,19 @@ type FundTaskProps = {
   createAndFundTask: () => void;
 };
 
+const assets = [
+  {
+    name: "ETH",
+    address: "0x0000000000000000000000000000000000000000",
+    decimals: 18,
+  },
+  {
+    name: "TEST",
+    address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    decimals: 18,
+  },
+];
+
 export const FundTask = ({
   tokenAddress,
   setTokenAddress,
@@ -20,19 +33,6 @@ export const FundTask = ({
   createTask,
   createAndFundTask,
 }: FundTaskProps) => {
-  const assets = [
-    {
-      name: "ETH",
-      address: "0x0000000000000000000000000000000000000000",
-      decimals: 18,
-    },
-    {
-      name: "TEST",
-      address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-      decimals: 18,
-    },
-  ];
-
   const [amountInputString, setAmountInputString] = useState("0");
 
   useEffect(() => {
