@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction } from "react";
-import { AddressInput } from "../../scaffold-eth";
+import { AddressInput } from "../../../scaffold-eth";
 
 type DefineTaskProps = {
   title: string;

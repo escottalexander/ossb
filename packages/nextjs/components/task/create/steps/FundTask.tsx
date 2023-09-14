@@ -1,5 +1,6 @@
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { parseUnits } from "viem";
+import { assets } from "~~/constants";
 
 type FundTaskProps = {
   tokenAddress: string;
@@ -10,19 +11,6 @@ type FundTaskProps = {
   createTask: () => void;
   createAndFundTask: () => void;
 };
-
-const assets = [
-  {
-    name: "ETH",
-    address: "0x0000000000000000000000000000000000000000",
-    decimals: 18,
-  },
-  {
-    name: "TEST",
-    address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-    decimals: 18,
-  },
-];
 
 export const FundTask = ({
   tokenAddress,
@@ -36,7 +24,6 @@ export const FundTask = ({
   const [amountInputString, setAmountInputString] = useState("0");
 
   useEffect(() => {
-    console.log(amountInputString, fundAmount);
     const selectedAsset = assets.find(i => i.address === tokenAddress);
     if (!amountInputString || amountInputString.match(/^\d{1,}(\.\d{0,18})?$/)) {
       //const val = BigInt(parseEther(e.currentTarget.value));

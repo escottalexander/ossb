@@ -1,4 +1,10 @@
 import mongoose from "mongoose";
+import { Log, TransactionReceipt } from "viem";
+
+export type Funding = {
+  tokenAddress: string;
+  amount: string;
+};
 
 export interface TaskDocument extends mongoose.Document {
   title: string;
@@ -8,15 +14,9 @@ export interface TaskDocument extends mongoose.Document {
   tags?: string[];
   funders?: {
     funder: mongoose.Schema.Types.ObjectId;
-    funding: {
-      tokenAddress: string;
-      amount: bigint;
-    }[];
+    funding: Funding[];
   }[];
-  funding?: {
-    tokenAddress: string;
-    amount: bigint;
-  }[];
+  funding?: Funding[];
   reviewer: string;
   reviewerPercentage: number;
   approvedWorker: string;
@@ -24,6 +24,9 @@ export interface TaskDocument extends mongoose.Document {
   approved: boolean;
   canceled: boolean;
   complete: boolean;
+  reverted: boolean;
+  includedInBlock: string;
+  index: string;
 }
 
 const taskSchema = new mongoose.Schema<TaskDocument>({
@@ -63,7 +66,7 @@ const taskSchema = new mongoose.Schema<TaskDocument>({
       funding: [
         {
           tokenAddress: { type: String, required: true },
-          amount: { type: BigInt },
+          amount: { type: String },
         },
       ],
     },
@@ -71,7 +74,7 @@ const taskSchema = new mongoose.Schema<TaskDocument>({
   funding: [
     {
       tokenAddress: { type: String, required: true },
-      amount: { type: BigInt },
+      amount: { type: String },
     },
   ],
   reviewer: {
@@ -89,7 +92,25 @@ const taskSchema = new mongoose.Schema<TaskDocument>({
   approved: { type: Boolean },
   canceled: { type: Boolean },
   complete: { type: Boolean },
+  reverted: { type: Boolean },
+  includedInBlock: { type: String },
+  index: { type: String },
 });
+
+taskSchema.methods.handleReceipt = async function (receipt: TransactionReceipt) {
+  if (receipt.status == "success") {
+    for (const event of receipt.logs) {
+      await this.handleEventLog(event);
+    }
+  } else {
+    this.reverted = true;
+  }
+};
+
+taskSchema.methods.handleEventLog = async function (log: Log) {
+  log.data;
+  console.log(log);
+};
 
 const Task = mongoose.models.Tasks || mongoose.model("Tasks", taskSchema);
 

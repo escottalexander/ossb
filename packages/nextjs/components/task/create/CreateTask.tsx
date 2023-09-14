@@ -1,15 +1,17 @@
 import { useState } from "react";
+import { useRouter } from "next/router";
+import FundTaskModal from "../modals/FundTaskModal";
 import { DefineTask } from "./steps/DefineTask";
-import { FundTask } from "./steps/FundTask";
+// import { FundTask } from "./steps/FundTask";
+import { TransactionReceipt, zeroAddress } from "viem";
 import { Connector, useAccount } from "wagmi";
 import { useDeployedContractInfo, useScaffoldContractWrite } from "~~/hooks/scaffold-eth";
 import { useERC20Write } from "~~/hooks/scaffold-eth/useERC20Write";
 import { notification } from "~~/utils/scaffold-eth";
 
-const zeroAddress = "0x0000000000000000000000000000000000000000";
-
 export const CreateTask = () => {
-  const [stepNumber, setStepNumber] = useState(1);
+  const router = useRouter();
+  // const [stepNumber, setStepNumber] = useState(1);
   const [title, setTitle] = useState("");
   const [creator, setCreator] = useState("");
   const [description, setDescription] = useState("");
@@ -31,15 +33,34 @@ export const CreateTask = () => {
   const { address } = useAccount({ onConnect });
   const [reviewer, setReviewer] = useState(address || ""); // Default to creator
   const [taskId, setTaskId] = useState("");
-  const [fundingTokenAddress, setFundingTokenAddress] = useState(zeroAddress);
-  const [fundAmount, setFundAmount] = useState(BigInt(0));
   const { data: payoutUponCompletionContract } = useDeployedContractInfo("PayoutUponCompletion");
+  // Funding Modal State
+  const [showFundingModal, setShowFundingModal] = useState(false);
+  const [fundingTokenAddress, setFundingTokenAddress] = useState(zeroAddress as string);
+  const [fundAmount, setFundAmount] = useState(BigInt(0));
+
+  const handleReceipt = async (receipt: TransactionReceipt) => {
+    const response = await fetch("/api/task/receipt", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ taskId, receipt }),
+    });
+    response;
+  };
+
   const { writeAsync: writeCreateTask } = useScaffoldContractWrite({
     contractName: "PayoutUponCompletion",
     functionName: "createTask",
     args: [taskId, reviewer, reviewerPercentage],
     onBlockConfirmation: txnReceipt => {
       console.log("📦 Transaction blockHash", txnReceipt.blockHash);
+      handleReceipt(txnReceipt);
+      setTimeout(function () {
+        setShowFundingModal(false);
+        router.push(`/task/${taskId}`);
+      }, 3000);
     },
   });
 
@@ -50,6 +71,11 @@ export const CreateTask = () => {
     value: fundingTokenAddress === zeroAddress ? fundAmount : BigInt(0),
     onBlockConfirmation: txnReceipt => {
       console.log("📦 Transaction blockHash", txnReceipt.blockHash);
+      handleReceipt(txnReceipt);
+      setTimeout(function () {
+        setShowFundingModal(false);
+        router.push(`/task/${taskId}`);
+      }, 3000);
     },
   });
 
@@ -89,7 +115,8 @@ export const CreateTask = () => {
         const respBody = await response.json();
         console.log(respBody);
         setTaskId(respBody._id);
-        setStepNumber(stepNumber + 1);
+        // setStepNumber(stepNumber + 1);
+        setShowFundingModal(true);
         // setIsLoading(false);
       } else {
         // Handle any errors
@@ -102,9 +129,9 @@ export const CreateTask = () => {
     }
   };
 
-  const goBack = () => {
-    setStepNumber(stepNumber - 1);
-  };
+  // const goBack = () => {
+  //   setStepNumber(stepNumber - 1);
+  // };
 
   const sendCreateTask = async () => {
     await writeCreateTask();
@@ -121,48 +148,79 @@ export const CreateTask = () => {
     }
   };
 
-  const renderStep = (num: number) => {
-    switch (num) {
-      case 1:
-        return (
-          <DefineTask
-            title={title}
-            setTitle={setTitle}
-            description={description}
-            setDescription={setDescription}
-            tags={tags}
-            setTags={setTags}
-            reviewerPercentage={reviewerPercentage}
-            setReviewerPercentage={setReviewerPercentage}
-            approvedWorker={approvedWorker}
-            setApprovedWorker={setApprovedWorker}
-            assignWorker={assignWorker}
-            setAssignWorker={setAssignWorker}
-            reviewer={reviewer || ""}
-            setReviewer={setReviewer}
-            reviewerTakesCut={reviewerTakesCut}
-            setReviewerTakesCut={setReviewerTakesCut}
-            defineTaskDone={defineTaskDone}
-          />
-        );
-      case 2:
-        return (
-          <FundTask
-            tokenAddress={fundingTokenAddress}
-            setTokenAddress={setFundingTokenAddress}
-            fundAmount={fundAmount}
-            setFundAmount={setFundAmount}
-            goBack={goBack}
-            createTask={sendCreateTask}
-            createAndFundTask={sendCreateAndFund}
-          />
-        );
-    }
-  };
+  // const renderStep = (num: number) => {
+  //   switch (num) {
+  //     case 1:
+  //       return (
+  //         <DefineTask
+  //           title={title}
+  //           setTitle={setTitle}
+  //           description={description}
+  //           setDescription={setDescription}
+  //           tags={tags}
+  //           setTags={setTags}
+  //           reviewerPercentage={reviewerPercentage}
+  //           setReviewerPercentage={setReviewerPercentage}
+  //           approvedWorker={approvedWorker}
+  //           setApprovedWorker={setApprovedWorker}
+  //           assignWorker={assignWorker}
+  //           setAssignWorker={setAssignWorker}
+  //           reviewer={reviewer || ""}
+  //           setReviewer={setReviewer}
+  //           reviewerTakesCut={reviewerTakesCut}
+  //           setReviewerTakesCut={setReviewerTakesCut}
+  //           defineTaskDone={defineTaskDone}
+  //         />
+  //       );
+  //     case 2:
+  //       return (
+  //         <FundTask
+  //           tokenAddress={fundingTokenAddress}
+  //           setTokenAddress={setFundingTokenAddress}
+  //           fundAmount={fundAmount}
+  //           setFundAmount={setFundAmount}
+  //           goBack={goBack}
+  //           createTask={sendCreateTask}
+  //           createAndFundTask={sendCreateAndFund}
+  //         />
+  //       );
+  //   }
+  // };
 
   return (
     <div className="bg-[url('/assets/gradient-bg.png')] bg-[length:100%_100%] py-10 px-5 sm:px-0 lg:py-auto max-w-[100vw]">
-      {renderStep(stepNumber)}
+      <DefineTask
+        title={title}
+        setTitle={setTitle}
+        description={description}
+        setDescription={setDescription}
+        tags={tags}
+        setTags={setTags}
+        reviewerPercentage={reviewerPercentage}
+        setReviewerPercentage={setReviewerPercentage}
+        approvedWorker={approvedWorker}
+        setApprovedWorker={setApprovedWorker}
+        assignWorker={assignWorker}
+        setAssignWorker={setAssignWorker}
+        reviewer={reviewer || ""}
+        setReviewer={setReviewer}
+        reviewerTakesCut={reviewerTakesCut}
+        setReviewerTakesCut={setReviewerTakesCut}
+        defineTaskDone={defineTaskDone}
+      />
+      {showFundingModal && (
+        <FundTaskModal
+          tokenAddress={fundingTokenAddress}
+          setTokenAddress={setFundingTokenAddress}
+          fundAmount={fundAmount}
+          setFundAmount={setFundAmount}
+          onClose={() => setShowFundingModal(false)}
+          skipBtn={sendCreateTask}
+          skipWording="Create task without funding"
+          nextBtn={sendCreateAndFund}
+          nextWording="Create and Fund Task"
+        />
+      )}
     </div>
   );
 };

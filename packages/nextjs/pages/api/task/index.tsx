@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Get existing task
-      const task = await Task.findOne({ _id: taskId });
+      const task = await Task.findById(taskId);
 
       task.title = title;
       task.creator = creator;

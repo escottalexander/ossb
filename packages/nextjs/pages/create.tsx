@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import type { NextPage } from "next";
 import { MetaHeader } from "~~/components/MetaHeader";
-import { CreateTask } from "~~/components/task/CreateTask";
+import { CreateTask } from "~~/components/task/create/CreateTask";
 
 // import { ContractData } from "~~/components/example-ui/ContractData";
 // import { ContractInteraction } from "~~/components/example-ui/ContractInteraction";
