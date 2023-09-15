@@ -30,7 +30,9 @@ contract PayoutUponCompletion is Ownable {
 	}
 
 	// Immutable variables
-	uint8 oneHundred = 100;
+	uint8 immutable oneHundred = 100;
+	uint16 immutable oneThousand = 1000;
+	uint16 immutable tenThousand = 10000;
 
 	// State Variables
 	uint8 public protocolTakeRate; // Percentage that protocol takes from every bounty claim
@@ -68,6 +70,7 @@ contract PayoutUponCompletion is Ownable {
 	error ExceedsLimit();
 	error FailedToSend();
 	error AmountNotSet();
+
 	// Functions
 	constructor(uint8 _protocolTakeRate, address _protocolAddress) {
 		if (_protocolTakeRate > maxProtocolTakeRate) {
@@ -113,12 +116,13 @@ contract PayoutUponCompletion is Ownable {
 		if (amount > withdrawableFunds[msg.sender][tokenAddress]) {
 			revert ExceedsLimit();
 		}
+		// Update user state
 		withdrawableFunds[msg.sender][tokenAddress] -= amount;
 		// Remove funds from total balance mapping
 		totalTokenBalance[tokenAddress] -= amount;
 		if (tokenAddress == address(0)){
 			// ETH
-			(bool sent,) = msg.sender.call{value: amount}("");
+			(bool sent,) = payable(msg.sender).call{value: amount}("");
 			if (!sent) {
 				revert FailedToSend();
 			}
@@ -153,13 +157,9 @@ contract PayoutUponCompletion is Ownable {
 		}
 		// Transfer value
 		if (token == address(0)) {
+			// Must be ETH
 			if (amount == 0 || msg.value != amount) {
 				revert AmountNotSet();
-			}
-			// Must be ETH
-			( bool sent, ) = address(this).call{value: msg.value}("");
-			if (!sent) {
-				revert FailedToSend();
 			}
 		} else {
 			if (amount == 0) {
@@ -253,17 +253,44 @@ contract PayoutUponCompletion is Ownable {
 		emit TaskFinalized(taskIndex);
 	}
 
-	// Need to review math here to confirm tokens don't get stuck in the contract
+	function _divideWithBasisPoints (uint amount, uint divisor) internal pure returns(uint) {
+		// Check if overflow would occur
+		if (amount > type(uint256).max / tenThousand) {
+			// Number too big to use basis points, just do normal division
+			return amount / divisor;
+		}
+		return (amount * tenThousand) / (divisor * tenThousand);
+	}
+
+	/**
+	@notice The purpose of the function is to change the withdrawable allocation of each party involved.
+	We check if an overflow would occur before performing the multiplication by the protocolRate and reviewerPercentage.
+	If one would occur then we do not change the protocol and reviewers allocation and instead give the full amount to
+	the worker. We believe this would only occur is someone funded with a malicious token and without these checks it 
+	would make it impossible to finalize the task.
+	@param amount total amount to distribute
+	@param token token address that is being processed
+	@param reviewer the task reviewer
+	@param worker the address that completed the task
+	@param reviewerPercentage percentage to allocate to the reviewer
+	*/
 	function _divyUp(uint amount, address token, address reviewer, address worker, uint reviewerPercentage) internal {
 		if (protocolTakeRate > 0) {
-			uint protocolShare = amount * protocolTakeRate / 1000; // By dividing by 1000 this allows us to adjust the take rate to be as granular as 0.1%
-			withdrawableFunds[protocolAddress][token] += protocolShare;
-			amount = amount - protocolShare;
+			// Check for overflow before multiplying
+			if (amount < type(uint256).max / protocolTakeRate) {
+				// By dividing by 1000 this allows us to adjust the take rate to be as granular as 0.1%
+				uint protocolShare = _divideWithBasisPoints(amount * protocolTakeRate, oneThousand);
+				withdrawableFunds[protocolAddress][token] += protocolShare;
+				amount = amount - protocolShare;
+			}
 		}
 		if (reviewerPercentage > 0) {
-			uint reviewerShare = amount * reviewerPercentage / 100;
-			withdrawableFunds[reviewer][token] += reviewerShare;
-			amount = amount - reviewerShare;
+			// Check for overflow before multiplying
+			if (amount < type(uint256).max / reviewerPercentage) {
+				uint reviewerShare = _divideWithBasisPoints(amount * reviewerPercentage, oneHundred);
+				withdrawableFunds[reviewer][token] += reviewerShare;
+				amount = amount - reviewerShare;
+			}
 		}
 		
 		withdrawableFunds[worker][token] += amount;
@@ -368,7 +395,7 @@ contract PayoutUponCompletion is Ownable {
 		if (tokenAddress == address(0)) {
 			uint inContract = address(this).balance;
 			uint stuck = inContract - trackedBalance;
-			(bool sent,) = owner().call{value: stuck}("");
+			(bool sent,) = payable(owner()).call{value: stuck}("");
 			if (!sent) {
 				revert FailedToSend();
 			}
