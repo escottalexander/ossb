@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity 0.8.18;
 
 // Use openzeppelin to inherit battle-tested implementations
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -23,14 +23,17 @@ contract PayoutUponCompletion is Ownable {
 		mapping(address => bool) hasFunderAddress; // Used for making sure funderAddresses only contains unique items
 		address[] funderAddresses; // Unique funder addresses
 		mapping(address => mapping(address => uint)) funding; // FunderAddress => tokenAddress => amount
-		uint creationTime; // May include this to refund users after certain time has passed
+		uint creationTime; // Include this to refund users after certain time has passed
 		bool approved; // Has task been reviewed and accepted, worker can be payed out
 		bool canceled; // Everyone is refunded when a task moves to this state
 		bool complete; // All funds have been allocated
 	}
 
+	// Immutable variables
+	uint8 oneHundred = 100;
+
 	// State Variables
-	uint8 public protocolTakeRate = 0; // Percentage that protocol takes from every bounty claim
+	uint8 public protocolTakeRate; // Percentage that protocol takes from every bounty claim
 	uint8 public maxProtocolTakeRate = 50; // Protocol won't be able to take more than this / 1000 of a bounty - 5% at default level - and this can never be modified upwards
 	uint32 public unlockPeriod = 63072000; // Two years in seconds - Anyone can cancel a task after this time period - uint32 maximimum is 136 years
 	address public protocolAddress; // Address that can claim funds that were allocated to protocol
@@ -54,44 +57,71 @@ contract PayoutUponCompletion is Ownable {
 	event TakeRateAdjusted (uint8 takeRate);
 	event MaxTakeRateLowered (uint8 maxTakeRate);
 	event UnlockPeriodAdjusted (uint32 unlockPeriod);
+	event ProtocolAddressAdjusted(address protocolAddress);
 
+	// Errors
+	error NotAuthorized();
+	error ZeroAddressNotAllowed();
+	error TaskDoesNotExist();
+	error TaskInFinalState();
+	error WorkNotApproved();
+	error ExceedsLimit();
+	error FailedToSend();
+	error AmountNotSet();
 	// Functions
 	constructor(uint8 _protocolTakeRate, address _protocolAddress) {
-		require(_protocolTakeRate <= maxProtocolTakeRate, "Protocol percent exceeds maximum");
-		require(_protocolAddress != address(0), "Protocol vault cannot be zero address");
+		if (_protocolTakeRate > maxProtocolTakeRate) {
+			revert ExceedsLimit();
+		}
+		if (_protocolAddress == address(0)) {
+			revert ZeroAddressNotAllowed();
+		}
 		protocolTakeRate = _protocolTakeRate;	
 		protocolAddress = _protocolAddress;
 	}
 
 	// Main Workflows
 	function createTask(string memory taskLocation, address reviewer, uint8 reviewerPercentage) external {
-		require(reviewer != address(0), "Reviewer address cannot be the zero address");
-		require(reviewerPercentage <= 100, "Reviewer Percentage cannot exceed 100%");
+		if (reviewer == address(0)) {
+			revert ZeroAddressNotAllowed();
+		}
+		if (reviewerPercentage > oneHundred) {
+			revert ExceedsLimit();
+		}
 		_createTask(taskLocation, reviewer, reviewerPercentage);
 	}
 
 	function createAndFundTask(string memory taskLocation, address reviewer, uint8 reviewerPercentage, uint amount, address token) external payable {
-		require(reviewer != address(0), "Reviewer address cannot be the zero address");
-		require(reviewerPercentage <= 100, "Reviewer Percentage cannot exceed 100%");
+		if (reviewer == address(0)) {
+			revert ZeroAddressNotAllowed();
+		}
+		if (reviewerPercentage > oneHundred) {
+			revert ExceedsLimit();
+		}
 		uint index = _createTask(taskLocation, reviewer, reviewerPercentage);
 		_fundTask(index, amount, token);
 	}
 
 	function fundTask(uint taskIndex, uint amount, address token) external payable {
-		require(currentTaskIndex > taskIndex, "A task does not exist at that index");
+		if (currentTaskIndex <= taskIndex) {
+			revert TaskDoesNotExist();
+		}
 		_fundTask(taskIndex, amount, token);
 	}
 
 	function withdraw(uint amount, address tokenAddress) external {
-		uint balance = withdrawableFunds[msg.sender][tokenAddress];
-		require(amount <= balance, "Specified amount is greater than funds");
-		balance -= amount; // Verify that this updates state - review
+		if (amount > withdrawableFunds[msg.sender][tokenAddress]) {
+			revert ExceedsLimit();
+		}
+		withdrawableFunds[msg.sender][tokenAddress] -= amount;
 		// Remove funds from total balance mapping
 		totalTokenBalance[tokenAddress] -= amount;
 		if (tokenAddress == address(0)){
 			// ETH
-			(bool sent,) = payable(msg.sender).call{value: amount}("");
-			require(sent, "Failed to send");
+			(bool sent,) = msg.sender.call{value: amount}("");
+			if (!sent) {
+				revert FailedToSend();
+			}
 		} else {
 			IERC20(tokenAddress).safeTransfer(msg.sender, amount);
 		}
@@ -118,16 +148,23 @@ contract PayoutUponCompletion is Ownable {
 
 	function _fundTask(uint taskIndex, uint amount, address token) internal {
 		Task storage task = tasks[taskIndex];
-		require(!task.complete || !task.canceled, "Task is in a final state, cannot fund it");
-
+		if (task.complete || task.canceled) {
+			revert TaskInFinalState();
+		}
 		// Transfer value
 		if (token == address(0)) {
-			require(amount > 0 && msg.value == amount, "Amount not set");
+			if (amount == 0 || msg.value != amount) {
+				revert AmountNotSet();
+			}
 			// Must be ETH
-			( bool sent, ) = payable(address(this)).call{value: msg.value}("");
-			require(sent, "Failed to send Ether");
+			( bool sent, ) = address(this).call{value: msg.value}("");
+			if (!sent) {
+				revert FailedToSend();
+			}
 		} else {
-			require(amount > 0, "Amount not set");
+			if (amount == 0) {
+				revert AmountNotSet();
+			}
 			IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 		}
 		// Update State
@@ -160,17 +197,27 @@ contract PayoutUponCompletion is Ownable {
 	// Big Payouts when this is called - take heed
 	function cancelTask(uint taskIndex) external {
 		Task storage task = tasks[taskIndex];
-		require(msg.sender == task.reviewer || block.timestamp - unlockPeriod > task.creationTime, "Unlock period has not completed, you are not the reviewer");
+		if (msg.sender != task.reviewer || block.timestamp - unlockPeriod < task.creationTime) {
+			revert NotAuthorized();
+		}
 		task.canceled = true;
 		// Refund all funders
-		for (uint i; i < task.funderAddresses.length; i ++) {
-			for (uint h; h < task.fundingType.length; h ++) {
+		uint funderLength = task.funderAddresses.length;
+		uint fundingLength = task.fundingType.length;
+		for (uint i; i < funderLength;) {
+			for (uint h; h < fundingLength;) {
 				address funder = task.funderAddresses[i];
 				address token = task.fundingType[h];
 				uint amount = task.funding[funder][token];
 				if (amount > 0) {
 					withdrawableFunds[funder][token] += amount;
 				}
+				unchecked {
+					h ++;
+				}
+			}
+			unchecked {
+				i ++;
 			}
 		}
 		emit TaskCanceled(taskIndex);
@@ -179,18 +226,29 @@ contract PayoutUponCompletion is Ownable {
 	// Anyone can do this if its in the right state
 	function finalizeTask(uint taskIndex) external {
 		Task storage task = tasks[taskIndex];
-		require(!task.canceled, "Cannot finalize canceled task");
-		require(!task.complete, "Task has already been finalized");
-		require(task.approved, "Task must be approved");
+		if (task.complete || task.canceled) {
+			revert TaskInFinalState();
+		}
+		if (!task.approved) {
+			revert WorkNotApproved();
+		}
 		task.complete = true;
-		for (uint h; h < task.fundingType.length; h ++) {
+		uint fundingLength = task.fundingType.length;
+		uint funderLength = task.funderAddresses.length;
+		for (uint h; h < fundingLength;) {
 			address token = task.fundingType[h];
 			uint totalAmount;
-			for (uint i; i < task.funderAddresses.length; i ++) {
+			for (uint i; i < funderLength;) {
 				address funder = task.funderAddresses[i];
 				totalAmount += task.funding[funder][token];
+				unchecked {
+					i ++;
+				}
 			}
 			_divyUp(totalAmount, token, task.reviewer, task.approvedWorker, task.reviewerPercentage);
+			unchecked {
+				h ++;
+			}
 		}
 		emit TaskFinalized(taskIndex);
 	}
@@ -214,8 +272,12 @@ contract PayoutUponCompletion is Ownable {
 	// Reviewer only functions
 	function approveTask(uint taskIndex, address approvedWorker) external {
 		Task storage task = tasks[taskIndex];
-		require(msg.sender == task.reviewer, "Only the reviewer can approve");
-		require(approvedWorker != address(0), "ApprovedWorker cannot be zero address");
+		if (msg.sender != task.reviewer) {
+			revert NotAuthorized();
+		}
+		if (approvedWorker == address(0)) {
+			revert ZeroAddressNotAllowed();
+		}
 		task.approvedWorker = approvedWorker;
 		task.approved = true;
 
@@ -224,7 +286,9 @@ contract PayoutUponCompletion is Ownable {
 
 	function setApprovedWorker(uint taskIndex, address approvedWorker) external {
 		Task storage task = tasks[taskIndex];
-		require(msg.sender == task.reviewer, "Only the reviewer can set the approved worker");
+		if (msg.sender != task.reviewer) {
+			revert NotAuthorized();
+		}
 		task.approvedWorker = approvedWorker;
 
 		emit ApprovedWorkerSet(taskIndex, approvedWorker);
@@ -241,14 +305,24 @@ contract PayoutUponCompletion is Ownable {
 	}
 
 	function getTaskFunding(uint taskIndex) external view returns (address[] memory, uint[] memory) {
-		require(taskIndex < currentTaskIndex, "Task at that index does not exist");
+		if (currentTaskIndex <= taskIndex) {
+			revert TaskDoesNotExist();
+		}
 		Task storage task = tasks[taskIndex];
 		uint[] memory amounts = new uint[](task.fundingType.length);
-		for (uint h; h < task.fundingType.length; h ++) {
+		uint fundingLength = task.fundingType.length;
+		uint funderLength = task.funderAddresses.length;
+		for (uint h; h < fundingLength;) {
 			address token = task.fundingType[h];
-			for (uint i; i < task.funderAddresses.length; i ++) {
+			for (uint i; i < funderLength;) {
 				address funder = task.funderAddresses[i];
 				amounts[h] += task.funding[funder][token];
+				unchecked {
+					i ++;
+				}
+			}
+			unchecked {
+				h ++;
 			}
 		}
 		return (task.fundingType, amounts);
@@ -256,14 +330,18 @@ contract PayoutUponCompletion is Ownable {
 
 	// Governance
 	function adjustTakeRate(uint8 takeRate) external onlyOwner {
-		require(takeRate <= maxProtocolTakeRate, "takeRate exceeds maximum");
+		if (takeRate > maxProtocolTakeRate) {
+			revert ExceedsLimit();
+		}
 		protocolTakeRate = takeRate;
 
 		emit TakeRateAdjusted(takeRate);
 	}
 	
 	function permanentlyLowerMaxTakeRate(uint8 takeRate) external onlyOwner {
-		require(takeRate < maxProtocolTakeRate, "TakeRate is higher than maximum allows");
+		if (takeRate > maxProtocolTakeRate) {
+			revert ExceedsLimit();
+		}
 		maxProtocolTakeRate = takeRate;
 		// If the current protocol take rate is greater than the new max then adjust it
 		if (protocolTakeRate > takeRate){
@@ -280,13 +358,20 @@ contract PayoutUponCompletion is Ownable {
 		emit UnlockPeriodAdjusted(unlockPeriod);
 	}
 
+	function adjustProtocolAddress(address _protocolAddress) external onlyOwner {
+		protocolAddress = _protocolAddress;
+		emit ProtocolAddressAdjusted(_protocolAddress);
+	}
+
 	function withdrawStuckTokens(address tokenAddress) external onlyOwner {
 		uint trackedBalance = totalTokenBalance[tokenAddress];
 		if (tokenAddress == address(0)) {
 			uint inContract = address(this).balance;
 			uint stuck = inContract - trackedBalance;
-			(bool sent,) = payable(owner()).call{value: stuck}("");
-			require(sent, "Failed to send excess to owner");
+			(bool sent,) = owner().call{value: stuck}("");
+			if (!sent) {
+				revert FailedToSend();
+			}
 		} else {
 			IERC20 token = IERC20(tokenAddress);
 			uint inContract = token.balanceOf(address(this));
