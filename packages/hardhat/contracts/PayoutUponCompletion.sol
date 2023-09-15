@@ -386,6 +386,9 @@ contract PayoutUponCompletion is Ownable {
 	}
 
 	function adjustProtocolAddress(address _protocolAddress) external onlyOwner {
+		if (_protocolAddress == address(0)) {
+			revert ZeroAddressNotAllowed();
+		}
 		protocolAddress = _protocolAddress;
 		emit ProtocolAddressAdjusted(_protocolAddress);
 	}
