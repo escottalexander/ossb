@@ -11,6 +11,15 @@ export const assets = [
   },
 ];
 
+export const contactMethods = [
+  { name: "Email", descriptor: "Address" },
+  { name: "Phone", descriptor: "Phone Number" },
+  { name: "Telegram", descriptor: "Handle" },
+  { name: "WhatsApp", descriptor: "Number" },
+  { name: "Signal", descriptor: "Number" },
+  { name: "Other", descriptor: "Value" },
+];
+
 export const PayoutUponCompletionAbi = [
   {
     inputs: [
@@ -27,6 +36,46 @@ export const PayoutUponCompletionAbi = [
     ],
     stateMutability: "nonpayable",
     type: "constructor",
+  },
+  {
+    inputs: [],
+    name: "AmountNotSet",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ExceedsLimit",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "FailedToSend",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "NotAuthorized",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "TaskDoesNotExist",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "TaskInFinalState",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "WorkNotApproved",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ZeroAddressNotAllowed",
+    type: "error",
   },
   {
     anonymous: false,
@@ -77,6 +126,19 @@ export const PayoutUponCompletionAbi = [
       },
     ],
     name: "OwnershipTransferred",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "address",
+        name: "protocolAddress",
+        type: "address",
+      },
+    ],
+    name: "ProtocolAddressAdjusted",
     type: "event",
   },
   {
@@ -243,7 +305,7 @@ export const PayoutUponCompletionAbi = [
       {
         indexed: false,
         internalType: "string",
-        name: "workUrl",
+        name: "workLocation",
         type: "string",
       },
     ],
@@ -253,6 +315,19 @@ export const PayoutUponCompletionAbi = [
   {
     stateMutability: "payable",
     type: "fallback",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "_protocolAddress",
+        type: "address",
+      },
+    ],
+    name: "adjustProtocolAddress",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
   },
   {
     inputs: [
@@ -617,7 +692,7 @@ export const PayoutUponCompletionAbi = [
       },
       {
         internalType: "string",
-        name: "workUrl",
+        name: "workLocation",
         type: "string",
       },
     ],

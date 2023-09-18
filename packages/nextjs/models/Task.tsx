@@ -11,6 +11,7 @@ export interface TaskDocument extends mongoose.Document {
   creator: string;
   description: string;
   location?: { address: string; city: string; state: string; country: string };
+  contactInfo?: { method: string; value: string }[];
   tags?: string[];
   funders?: {
     funder: mongoose.Schema.Types.ObjectId;
@@ -55,6 +56,12 @@ const taskSchema = new mongoose.Schema<TaskDocument>({
       type: String,
     },
   },
+  contactInfo: [
+    {
+      method: { type: String },
+      value: { type: String },
+    },
+  ],
   tags: [
     {
       type: String,

@@ -4,7 +4,7 @@ import { parseUnits } from "viem";
 import { assets } from "~~/constants";
 
 // Define an interface for the props that LoadingModal component receives
-interface IFundTaskModal {
+interface ISubmitWorkModal {
   tokenAddress: string;
   setTokenAddress: Dispatch<SetStateAction<string>>;
   fundAmount: bigint;
@@ -17,7 +17,7 @@ interface IFundTaskModal {
 }
 
 // Define the LoadingModal component as a functional component that receives props of type ILoadingModal
-const FundTaskModal: React.FC<IFundTaskModal> = ({
+const SubmitWorkModal: React.FC<ISubmitWorkModal> = ({
   tokenAddress,
   setTokenAddress,
   fundAmount,
@@ -51,7 +51,7 @@ const FundTaskModal: React.FC<IFundTaskModal> = ({
                 const val = e.currentTarget.value;
                 setTokenAddress(val);
               }}
-              placeholder="Select the token you are using"
+              placeholder="Percentage of task to pay out to reviewer"
               className="input input-bordered focus:outline-none w-full max-w-sm rounded-md"
             >
               {assets.map(a => (
@@ -90,5 +90,5 @@ const FundTaskModal: React.FC<IFundTaskModal> = ({
   );
 };
 
-// Export the FundTaskModal component to be used in other parts of the application
-export default FundTaskModal;
+// Export the SubmitWorkModal component to be used in other parts of the application
+export default SubmitWorkModal;

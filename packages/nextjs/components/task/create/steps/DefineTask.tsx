@@ -1,5 +1,7 @@
-import { Dispatch, SetStateAction } from "react";
+import { Dispatch, SetStateAction, useState } from "react";
 import { AddressInput } from "../../../scaffold-eth";
+import { XMarkIcon } from "@heroicons/react/20/solid";
+import { contactMethods } from "~~/constants";
 
 type DefineTaskProps = {
   title: string;
@@ -18,6 +20,8 @@ type DefineTaskProps = {
   setReviewerTakesCut: Dispatch<SetStateAction<boolean>>;
   reviewerPercentage: number;
   setReviewerPercentage: Dispatch<SetStateAction<number>>;
+  contactInfo: { method: string; value: string }[] | undefined;
+  setContactInfo: Dispatch<SetStateAction<{ method: string; value: string }[] | undefined>>;
   defineTaskDone: () => void;
 };
 
@@ -38,8 +42,47 @@ export const DefineTask = ({
   setReviewer,
   reviewerTakesCut,
   setReviewerTakesCut,
+  contactInfo,
+  setContactInfo,
   defineTaskDone,
 }: DefineTaskProps) => {
+  const [currentSelectedContactMethod, setCurrentSelectedContactMethod] = useState(contactMethods[0]);
+  const [currentSelectedContactMethodValue, setCurrentSelectedContactMethodValue] = useState("");
+  const [contactInvalid, setContactInvalid] = useState(false);
+  const checkEmail = (email: string) => {
+    return /^[a-zA-Z0-9]+@(?:[a-zA-Z0-9]+\.)+[A-Za-z]+$/.test(email);
+  };
+
+  const verifyContactMethod = () => {
+    const method = currentSelectedContactMethod.name;
+    const value = currentSelectedContactMethodValue.trim();
+    // Verify validity of method, trim input
+    if (method == "Email" && !checkEmail(value)) {
+      // mark email as invalid
+      setContactInvalid(true);
+      return;
+    }
+    const exists = contactInfo?.find(i => `${i.method}:${i.value}` == `${method}:${value}`);
+    if (exists) {
+      setCurrentSelectedContactMethod(contactMethods[0]);
+      setCurrentSelectedContactMethodValue("");
+      return;
+    }
+    const newContactInfo = (contactInfo || []).concat({
+      method,
+      value,
+    });
+    setContactInfo(newContactInfo);
+    setCurrentSelectedContactMethod(contactMethods[0]);
+    setCurrentSelectedContactMethodValue("");
+  };
+
+  const removeContactMethod = (contactMethod: { method: string; value: string }) => {
+    const { method, value } = contactMethod;
+    const newContactInfo = contactInfo?.filter(i => `${i.method}:${i.value}` != `${method}:${value}`);
+    setContactInfo(newContactInfo);
+  };
+
   return (
     <div className="flex flex-col items-center">
       <h1 className="text-xl mb-10">Create Task</h1>
@@ -81,6 +124,79 @@ export const DefineTask = ({
           placeholder="Add several tags that will help someone find your task"
           className="input input-bordered focus:outline-none w-full max-w-sm rounded-md"
         />
+      </div>
+      <div className="join">
+        <div className="form-control w-1/3 max-w-sm">
+          <label className="label">
+            <span className="label-text">Contact Method</span>
+          </label>
+          <select
+            value={currentSelectedContactMethod.name}
+            onChange={e => {
+              const val = contactMethods.find(m => m.name == e.currentTarget.value);
+              if (val) {
+                setCurrentSelectedContactMethod(val);
+              }
+            }}
+            placeholder="Select the token you are using"
+            className={`input input-bordered focus:outline-none w-full max-w-sm rounded-md`}
+          >
+            {contactMethods.map(method => (
+              <option key={method.name} value={method.name}>
+                {method.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-control w-1/2 max-w-sm">
+          <label className="label">
+            <span className="label-text">Value</span>
+          </label>
+          <input
+            type="text"
+            value={currentSelectedContactMethodValue}
+            onChange={e => {
+              setCurrentSelectedContactMethodValue(e.currentTarget.value);
+            }}
+            placeholder={currentSelectedContactMethod.descriptor}
+            className={`input input-bordered focus:outline-none w-full max-w-sm rounded-md ${
+              contactInvalid ? "input-error" : ""
+            }`}
+          />
+        </div>
+        <div className="form-control w-1/6 max-w-sm mt-9">
+          <button className="btn btn-full rounded-l-lg" onClick={verifyContactMethod}>
+            Add
+          </button>
+        </div>
+      </div>
+      <div className="bg-white p-6 w-full max-w-sm rounded-md m-4">
+        {contactInfo && contactInfo.length > 0 && (
+          <table className="table">
+            {/* head */}
+            <thead>
+              <tr>
+                <th>Contact Method</th>
+                <th>Value</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {contactInfo.map(i => (
+                <tr key={`${i.method}:${i.value}`}>
+                  <td>{`${i.method}`}</td>
+                  <td>{`${i.value}`}</td>
+                  <td>
+                    <button className="btn btn-sm rounded-md" onClick={() => removeContactMethod(i)}>
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {(!contactInfo || !contactInfo.length) && <p className="text-center">No contact methods selected</p>}
       </div>
       <div className="form-control w-full max-w-sm">
         <label className="label">

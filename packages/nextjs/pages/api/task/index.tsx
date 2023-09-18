@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   async function create(req: NextApiRequest, res: NextApiResponse) {
     try {
       // get data from request
-      const { title, creator, description, tags, reviewer, reviewerPercentage, approvedWorker } = req.body;
+      const { title, creator, description, tags, reviewer, reviewerPercentage, contactInfo, approvedWorker } = req.body;
 
       // Validate the required fields
       if (!title || !creator || !description || !reviewer) {
@@ -33,6 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         creator,
         description,
         tags,
+        contactInfo,
         reviewer,
         reviewerPercentage,
         approvedWorker,
@@ -57,7 +58,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   async function update(req: NextApiRequest, res: NextApiResponse) {
     try {
       // get data from request
-      const { taskId, title, creator, description, tags, reviewer, reviewerPercentage, approvedWorker } = req.body;
+      const { taskId, title, creator, description, tags, contactInfo, reviewer, reviewerPercentage, approvedWorker } =
+        req.body;
 
       // Validate the required fields
       if (!taskId || !title || !creator || !description || !reviewer) {
@@ -71,6 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       task.creator = creator;
       task.description = description;
       task.tags = tags;
+      task.contactInfo = contactInfo;
       task.reviewer = reviewer;
       task.reviewerPercentage = reviewerPercentage;
       task.approvedWorker = approvedWorker;

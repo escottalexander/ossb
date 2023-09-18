@@ -11,7 +11,6 @@ import { notification } from "~~/utils/scaffold-eth";
 
 export const CreateTask = () => {
   const router = useRouter();
-  // const [stepNumber, setStepNumber] = useState(1);
   const [title, setTitle] = useState("");
   const [creator, setCreator] = useState("");
   const [description, setDescription] = useState("");
@@ -20,6 +19,7 @@ export const CreateTask = () => {
   const [approvedWorker, setApprovedWorker] = useState("");
   const [assignWorker, setAssignWorker] = useState(false);
   const [reviewerTakesCut, setReviewerTakesCut] = useState(false);
+  const [contactInfo, setContactInfo] = useState<{ method: string; value: string }[]>();
   const onConnect = (u: {
     address?: string | undefined;
     connector?: Connector<any, any> | undefined;
@@ -100,6 +100,7 @@ export const CreateTask = () => {
       tags,
       reviewer,
       reviewerPercentage,
+      contactInfo,
       approvedWorker,
     };
     try {
@@ -129,10 +130,6 @@ export const CreateTask = () => {
     }
   };
 
-  // const goBack = () => {
-  //   setStepNumber(stepNumber - 1);
-  // };
-
   const sendCreateTask = async () => {
     await writeCreateTask();
   };
@@ -147,45 +144,6 @@ export const CreateTask = () => {
       await writeCreateAndFundTask();
     }
   };
-
-  // const renderStep = (num: number) => {
-  //   switch (num) {
-  //     case 1:
-  //       return (
-  //         <DefineTask
-  //           title={title}
-  //           setTitle={setTitle}
-  //           description={description}
-  //           setDescription={setDescription}
-  //           tags={tags}
-  //           setTags={setTags}
-  //           reviewerPercentage={reviewerPercentage}
-  //           setReviewerPercentage={setReviewerPercentage}
-  //           approvedWorker={approvedWorker}
-  //           setApprovedWorker={setApprovedWorker}
-  //           assignWorker={assignWorker}
-  //           setAssignWorker={setAssignWorker}
-  //           reviewer={reviewer || ""}
-  //           setReviewer={setReviewer}
-  //           reviewerTakesCut={reviewerTakesCut}
-  //           setReviewerTakesCut={setReviewerTakesCut}
-  //           defineTaskDone={defineTaskDone}
-  //         />
-  //       );
-  //     case 2:
-  //       return (
-  //         <FundTask
-  //           tokenAddress={fundingTokenAddress}
-  //           setTokenAddress={setFundingTokenAddress}
-  //           fundAmount={fundAmount}
-  //           setFundAmount={setFundAmount}
-  //           goBack={goBack}
-  //           createTask={sendCreateTask}
-  //           createAndFundTask={sendCreateAndFund}
-  //         />
-  //       );
-  //   }
-  // };
 
   return (
     <div className="bg-[url('/assets/gradient-bg.png')] bg-[length:100%_100%] py-10 px-5 sm:px-0 lg:py-auto max-w-[100vw]">
@@ -206,6 +164,8 @@ export const CreateTask = () => {
         setReviewer={setReviewer}
         reviewerTakesCut={reviewerTakesCut}
         setReviewerTakesCut={setReviewerTakesCut}
+        contactInfo={contactInfo}
+        setContactInfo={setContactInfo}
         defineTaskDone={defineTaskDone}
       />
       {showFundingModal && (

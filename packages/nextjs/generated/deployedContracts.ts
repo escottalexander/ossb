@@ -432,6 +432,46 @@ const contracts = {
               type: "constructor",
             },
             {
+              inputs: [],
+              name: "AmountNotSet",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "ExceedsLimit",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "FailedToSend",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "NotAuthorized",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "TaskDoesNotExist",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "TaskInFinalState",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "WorkNotApproved",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "ZeroAddressNotAllowed",
+              type: "error",
+            },
+            {
               anonymous: false,
               inputs: [
                 {
@@ -480,6 +520,19 @@ const contracts = {
                 },
               ],
               name: "OwnershipTransferred",
+              type: "event",
+            },
+            {
+              anonymous: false,
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "protocolAddress",
+                  type: "address",
+                },
+              ],
+              name: "ProtocolAddressAdjusted",
               type: "event",
             },
             {
@@ -646,7 +699,7 @@ const contracts = {
                 {
                   indexed: false,
                   internalType: "string",
-                  name: "workUrl",
+                  name: "workLocation",
                   type: "string",
                 },
               ],
@@ -656,6 +709,19 @@ const contracts = {
             {
               stateMutability: "payable",
               type: "fallback",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "address",
+                  name: "_protocolAddress",
+                  type: "address",
+                },
+              ],
+              name: "adjustProtocolAddress",
+              outputs: [],
+              stateMutability: "nonpayable",
+              type: "function",
             },
             {
               inputs: [
@@ -1020,7 +1086,7 @@ const contracts = {
                 },
                 {
                   internalType: "string",
-                  name: "workUrl",
+                  name: "workLocation",
                   type: "string",
                 },
               ],
