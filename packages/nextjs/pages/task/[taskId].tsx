@@ -100,7 +100,7 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
 
   const { writeAsync: writeAssignTask } = useScaffoldContractWrite({
     contractName: "PayoutUponCompletion",
-    functionName: "approveTask",
+    functionName: "setApprovedWorker",
     args: [BigInt(task.index), assignedWorkerAddress],
     onBlockConfirmation: txnReceipt => {
       console.log("📦 Transaction blockHash", txnReceipt.blockHash);
@@ -174,7 +174,16 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
           <div className="flex flex-col items-start w-2/3">
             <h1 className="text-xl">{task.title}</h1>
             <p>{task.description}</p>
-            <p>Send follow up questions to: taskcreator@gmail.com</p>
+            {task.contactInfo && (
+              <>
+                <span>Contact Methods:</span>
+                <ul>
+                  {task.contactInfo.map(c => (
+                    <li key={`${c.method}-${c.value}`}>{`${c.method}: ${c.value}`}</li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
           <div className="flex flex-col items-end w-1/3">
             <span className="text-md">
@@ -183,6 +192,11 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
             <span className="text-md">
               Reviewer: <Address address={task.reviewer} />
             </span>
+            {task.approvedWorker && (
+              <span className="text-md">
+                Assigned Worker: <Address address={task.reviewer} />
+              </span>
+            )}
           </div>
         </div>
         <div className="flex flex-row w-1/3 m-4 ml-0 p-6 justify-between border rounded-lg bg-white">
@@ -197,9 +211,9 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
             <button className="btn btn-primary btn-lg mb-1" onClick={() => setShowFundingModal(true)}>
               Fund Task
             </button>
-            {(address == task.creator || address == task.reviewer) && (
+            {/* {(address == task.creator || address == task.reviewer) && (
               <button className="btn btn-warning btn-lg my-1">Edit Task</button>
-            )}
+            )} */}
             {address == task.reviewer && (
               <button className="btn btn-success btn-lg my-1" onClick={() => setShowAssignTaskModal(true)}>
                 Assign Task

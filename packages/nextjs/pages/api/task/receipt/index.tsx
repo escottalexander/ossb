@@ -3,7 +3,15 @@ import { Abi, TransactionReceipt, decodeEventLog } from "viem";
 import { PayoutUponCompletionAbi } from "~~/constants";
 import dbConnect from "~~/lib/dbConnect";
 import Task, { Funding } from "~~/models/Task";
-import { GenericEvent, TaskCreatedEvent, TaskFundedEvent } from "~~/types/task";
+import {
+  ApprovedWorkerSetEvent,
+  GenericEvent,
+  TaskApprovedEvent,
+  TaskCanceledEvent,
+  TaskCreatedEvent,
+  TaskFinalizedEvent,
+  TaskFundedEvent,
+} from "~~/types/task";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Connect to the database
@@ -61,6 +69,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case "TaskFunded":
         taskFundedHandler(event as TaskFundedEvent, receipt, taskId);
         break;
+      case "TaskCanceled":
+        taskCanceledHandler(event as TaskCanceledEvent, receipt);
+        break;
+      case "TaskApproved":
+        taskApprovedHandler(event as TaskApprovedEvent, receipt);
+        break;
+      case "TaskFinalized":
+        taskFinalizedHandler(event as TaskFinalizedEvent, receipt);
+        break;
+      case "ApprovedWorkerSet":
+        approvedWorkerSetHandler(event as ApprovedWorkerSetEvent, receipt);
+        break;
     }
   }
 
@@ -89,6 +109,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else {
         task.funding.push({ tokenAddress: token, amount });
       }
+      task.save();
+    }
+  }
+
+  async function taskCanceledHandler(event: TaskCanceledEvent, receipt: TransactionReceipt) {
+    receipt; // Will need this later to verify we haven't processed this event before
+    const { index } = event.args;
+    const task = await Task.findById(index);
+    if (task) {
+      task.canceled = true;
+      task.save();
+    }
+  }
+
+  async function taskApprovedHandler(event: TaskApprovedEvent, receipt: TransactionReceipt) {
+    receipt; // Will need this later to verify we haven't processed this event before
+    const { index, worker } = event.args;
+    const task = await Task.findById(index);
+    if (task) {
+      task.canceled = true;
+      task.worker = worker;
+      task.save();
+    }
+  }
+
+  async function taskFinalizedHandler(event: TaskFinalizedEvent, receipt: TransactionReceipt) {
+    receipt; // Will need this later to verify we haven't processed this event before
+    const { index } = event.args;
+    const task = await Task.findById(index);
+    if (task) {
+      task.complete = true;
+      task.save();
+    }
+  }
+
+  // async function WorkSubmittedHandler(event: WorkSubmittedEvent, receipt: TransactionReceipt) {
+  //   receipt; // Will need this later to verify we haven't processed this event before
+  //   const { index, worker, workLocation } = event.args;
+  //   const task = await Task.findById(index);
+  //   if (task) {
+  //     task.canceled = true;
+  //     task.worker = worker;
+  //     task.save();
+  //   }
+  // }
+
+  async function approvedWorkerSetHandler(event: ApprovedWorkerSetEvent, receipt: TransactionReceipt) {
+    receipt; // Will need this later to verify we haven't processed this event before
+    const { index, worker } = event.args;
+    const task = await Task.findById(index);
+    if (task) {
+      task.worker = worker;
       task.save();
     }
   }
