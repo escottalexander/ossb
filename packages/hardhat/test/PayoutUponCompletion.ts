@@ -15,20 +15,18 @@ const stubs = {
 };
 
 const helperMethods = {
-  taskArrayToObject: (taskArr: [string, number, string, string[], string[], BigNumber, boolean, boolean, boolean]) => {
+  taskArrayToObject: (taskArr: [string, BigNumber, string, number, boolean, boolean, boolean]) => {
     return {
-      reviewer: taskArr[0],
-      reviewerPercentage: taskArr[1],
-      approvedWorker: taskArr[2],
-      fundingType: taskArr[3],
-      funderAddresses: taskArr[4],
-      creationTime: taskArr[5],
-      approved: taskArr[6],
-      canceled: taskArr[7],
-      complete: taskArr[8],
+      approvedWorker: taskArr[0],
+      creationTime: taskArr[1],
+      reviewer: taskArr[2],
+      reviewerPercentage: taskArr[3],
+      approved: taskArr[4],
+      canceled: taskArr[5],
+      complete: taskArr[6],
     };
   },
-  fundingArrayToObject: (fundingArr: [string[], BigNumber[]]) => {
+  fundingArrayToObject: (fundingArr: [string[], BigNumber[], boolean]) => {
     const obj = {} as { [key: string]: BigNumber };
     const tokens = fundingArr[0];
     const amounts = fundingArr[1];
@@ -93,8 +91,6 @@ describe("PayoutUponCompletion", function () {
       expect(task.reviewer).to.equal(reviewer.address);
       expect(task.reviewerPercentage).to.equal(0);
       expect(task.creationTime.toNumber()).to.be.gt(0);
-      expect(task.funderAddresses.length).to.equal(0);
-      expect(task.fundingType.length).to.equal(0);
       expect(task.approvedWorker).to.equal(stubs.zeroAddr);
       expect(task.approved).to.equal(false);
       expect(task.canceled).to.equal(false);
@@ -126,8 +122,6 @@ describe("PayoutUponCompletion", function () {
       expect(task.reviewer).to.equal(reviewer.address);
       expect(task.reviewerPercentage).to.equal(0);
       expect(task.creationTime.toNumber()).to.be.gt(0);
-      expect(task.funderAddresses.length).to.equal(1);
-      expect(task.fundingType.length).to.equal(1);
       expect(task.approvedWorker).to.equal(stubs.zeroAddr);
       expect(task.approved).to.equal(false);
       expect(task.canceled).to.equal(false);
@@ -139,6 +133,7 @@ describe("PayoutUponCompletion", function () {
 
     it("Should be able to create and fund task with an ERC20", async function () {
       const beforeBalance = await tokenUno.balanceOf(payoutUponCompletion.address);
+      await payoutUponCompletion.updateTokenAllowList(tokenUno.address, true);
       await tokenUno.approve(payoutUponCompletion.address, stubs.oneEther);
       const tx = await payoutUponCompletion.createAndFundTask(
         stubs.taskUrl,
@@ -164,8 +159,6 @@ describe("PayoutUponCompletion", function () {
       expect(task.reviewer).to.equal(reviewer.address);
       expect(task.reviewerPercentage).to.equal(0);
       expect(task.creationTime.toNumber()).to.be.gt(0);
-      expect(task.funderAddresses.length).to.equal(1);
-      expect(task.fundingType.length).to.equal(1);
       expect(task.approvedWorker).to.equal(stubs.zeroAddr);
       expect(task.approved).to.equal(false);
       expect(task.canceled).to.equal(false);
@@ -200,15 +193,14 @@ describe("PayoutUponCompletion", function () {
       expect(task.reviewer).to.equal(reviewer.address);
       expect(task.reviewerPercentage).to.equal(0);
       expect(task.creationTime.toNumber()).to.be.gt(0);
-      expect(task.funderAddresses.length).to.equal(1);
-      expect(task.fundingType.length).to.equal(1);
       expect(task.approvedWorker).to.equal(stubs.zeroAddr);
       expect(task.approved).to.equal(false);
       expect(task.canceled).to.equal(false);
       expect(task.complete).to.equal(false);
 
-      const taskFunding = await payoutUponCompletion.getTaskFunding(taskIndex);
-      expect(taskFunding.length).to.equal(2);
+      const taskFunding = await payoutUponCompletion.getTaskFunding(taskIndex, [stubs.zeroAddr]);
+      expect(taskFunding.length).to.equal(3);
+      expect(taskFunding[2]).to.equal(true);
       const funding = helperMethods.fundingArrayToObject(taskFunding);
       expect(funding[stubs.zeroAddr]).to.equal(stubs.oneEther);
 
@@ -233,15 +225,14 @@ describe("PayoutUponCompletion", function () {
       expect(task.reviewer).to.equal(reviewer.address);
       expect(task.reviewerPercentage).to.equal(0);
       expect(task.creationTime.toNumber()).to.be.gt(0);
-      expect(task.funderAddresses.length).to.equal(1);
-      expect(task.fundingType.length).to.equal(2);
       expect(task.approvedWorker).to.equal(stubs.zeroAddr);
       expect(task.approved).to.equal(false);
       expect(task.canceled).to.equal(false);
       expect(task.complete).to.equal(false);
 
-      const taskFunding = await payoutUponCompletion.getTaskFunding(taskIndex);
-      expect(taskFunding.length).to.equal(2);
+      const taskFunding = await payoutUponCompletion.getTaskFunding(taskIndex, [tokenUno.address, stubs.zeroAddr]);
+      expect(taskFunding.length).to.equal(3);
+      expect(taskFunding[2]).to.equal(true);
       const funding = helperMethods.fundingArrayToObject(taskFunding);
       expect(funding[tokenUno.address]).to.equal(stubs.oneEther);
 
