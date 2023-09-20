@@ -64,30 +64,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(event);
     switch (event.eventName) {
       case "TaskCreated":
-        taskCreatedHandler(event as TaskCreatedEvent, receipt);
+        taskCreatedHandler(event as TaskCreatedEvent, receipt, taskId);
         break;
       case "TaskFunded":
         taskFundedHandler(event as TaskFundedEvent, receipt, taskId);
         break;
       case "TaskCanceled":
-        taskCanceledHandler(event as TaskCanceledEvent, receipt);
+        taskCanceledHandler(event as TaskCanceledEvent, receipt, taskId);
         break;
       case "TaskApproved":
-        taskApprovedHandler(event as TaskApprovedEvent, receipt);
+        taskApprovedHandler(event as TaskApprovedEvent, receipt, taskId);
         break;
       case "TaskFinalized":
-        taskFinalizedHandler(event as TaskFinalizedEvent, receipt);
+        taskFinalizedHandler(event as TaskFinalizedEvent, receipt, taskId);
         break;
       case "ApprovedWorkerSet":
-        approvedWorkerSetHandler(event as ApprovedWorkerSetEvent, receipt);
+        approvedWorkerSetHandler(event as ApprovedWorkerSetEvent, receipt, taskId);
         break;
     }
   }
 
-  async function taskCreatedHandler(event: TaskCreatedEvent, receipt: TransactionReceipt) {
+  async function taskCreatedHandler(event: TaskCreatedEvent, receipt: TransactionReceipt, taskId: string) {
     receipt; // Will need this later to verify we haven't processed this event before
-    const { index, taskLocation, reviewer } = event.args;
-    const task = await Task.findById(taskLocation);
+    const { index, reviewer } = event.args;
+    const task = await Task.findById(taskId);
     if (task) {
       task.index = index;
       task.reviewer = reviewer;
@@ -113,54 +113,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  async function taskCanceledHandler(event: TaskCanceledEvent, receipt: TransactionReceipt) {
+  async function taskCanceledHandler(event: TaskCanceledEvent, receipt: TransactionReceipt, taskId: string) {
     receipt; // Will need this later to verify we haven't processed this event before
-    const { index } = event.args;
-    const task = await Task.findById(index);
+    // const { index } = event.args;
+    const task = await Task.findById(taskId);
     if (task) {
       task.canceled = true;
       task.save();
     }
   }
 
-  async function taskApprovedHandler(event: TaskApprovedEvent, receipt: TransactionReceipt) {
+  async function taskApprovedHandler(event: TaskApprovedEvent, receipt: TransactionReceipt, taskId: string) {
     receipt; // Will need this later to verify we haven't processed this event before
-    const { index, worker } = event.args;
-    const task = await Task.findById(index);
+    const { worker } = event.args;
+    const task = await Task.findById(taskId);
     if (task) {
-      task.canceled = true;
+      task.approved = true;
       task.worker = worker;
       task.save();
     }
   }
 
-  async function taskFinalizedHandler(event: TaskFinalizedEvent, receipt: TransactionReceipt) {
+  async function taskFinalizedHandler(event: TaskFinalizedEvent, receipt: TransactionReceipt, taskId: string) {
     receipt; // Will need this later to verify we haven't processed this event before
-    const { index } = event.args;
-    const task = await Task.findById(index);
+    // const { index } = event.args;
+    const task = await Task.findById(taskId);
     if (task) {
       task.complete = true;
       task.save();
     }
   }
 
-  // async function WorkSubmittedHandler(event: WorkSubmittedEvent, receipt: TransactionReceipt) {
-  //   receipt; // Will need this later to verify we haven't processed this event before
-  //   const { index, worker, workLocation } = event.args;
-  //   const task = await Task.findById(index);
-  //   if (task) {
-  //     task.canceled = true;
-  //     task.worker = worker;
-  //     task.save();
-  //   }
-  // }
-
-  async function approvedWorkerSetHandler(event: ApprovedWorkerSetEvent, receipt: TransactionReceipt) {
+  async function approvedWorkerSetHandler(event: ApprovedWorkerSetEvent, receipt: TransactionReceipt, taskId: string) {
     receipt; // Will need this later to verify we haven't processed this event before
-    const { index, worker } = event.args;
-    const task = await Task.findById(index);
+    const { worker } = event.args;
+    const task = await Task.findById(taskId);
     if (task) {
-      task.worker = worker;
+      task.approvedWorker = worker;
       task.save();
     }
   }

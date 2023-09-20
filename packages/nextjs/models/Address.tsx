@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-export interface FunderDocument extends mongoose.Document {
+export interface AddressDocument extends mongoose.Document {
   address: string;
   profile: {
     organization: string;
@@ -21,9 +21,10 @@ export interface FunderDocument extends mongoose.Document {
     amount: bigint;
   }[];
   createdTasks?: [mongoose.Schema.Types.ObjectId];
+  completedTasks?: [mongoose.Schema.Types.ObjectId];
 }
 
-const FunderSchema = new mongoose.Schema<FunderDocument>({
+const AddressSchema = new mongoose.Schema<AddressDocument>({
   address: {
     type: String,
     required: true,
@@ -73,8 +74,9 @@ const FunderSchema = new mongoose.Schema<FunderDocument>({
     },
   ],
   createdTasks: [{ type: mongoose.Schema.Types.ObjectId }],
+  completedTasks: [{ type: mongoose.Schema.Types.ObjectId }],
 });
 
-const Funder = mongoose.models.Funders || mongoose.model("Funders", FunderSchema);
+const Address = mongoose.models.Addresses || mongoose.model("Addresses", AddressSchema);
 
-export default Funder;
+export default Address;

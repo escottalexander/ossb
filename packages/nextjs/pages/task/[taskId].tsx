@@ -25,13 +25,14 @@ interface Props {
 const TaskDetail: NextPage<Props> = ({ task }) => {
   const router = useRouter();
   const { address } = useAccount();
-  const { query, pathname } = useRouter();
+  const { query, pathname } = router;
   console.log(query, pathname);
+
   const { data: payoutUponCompletionContract } = useDeployedContractInfo("PayoutUponCompletion");
 
   // Success Modal State
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-
+  const [successMessage, setSuccessMessage] = useState("Success!");
   // Funding Modal State
   const [showFundingModal, setShowFundingModal] = useState(false);
   const [fundingTokenAddress, setFundingTokenAddress] = useState(zeroAddress as string);
@@ -48,6 +49,7 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
       setShowSuccessModal(true);
       setTimeout(function () {
         setShowFundingModal(false);
+        setSuccessMessage("You funded this task! Way to go!");
         setShowSuccessModal(false);
         router.push(`/task/${task._id}`);
       }, 3000);
@@ -88,6 +90,7 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
       setShowSuccessModal(true);
       setTimeout(function () {
         setShowApproveWorkModal(false);
+        setSuccessMessage("Successfully approved task.");
         setShowSuccessModal(false);
         router.push(`/task/${task._id}`);
       }, 3000);
@@ -108,6 +111,7 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
       setShowSuccessModal(true);
       setTimeout(function () {
         setShowAssignTaskModal(false);
+        setSuccessMessage("You successfully assigned an address to the task.");
         setShowSuccessModal(false);
         router.push(`/task/${task._id}`);
       }, 3000);
@@ -127,6 +131,7 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
       setShowSuccessModal(true);
       setTimeout(function () {
         setShowCancelTaskModal(false);
+        setSuccessMessage("Task has been canceled.");
         setShowSuccessModal(false);
         router.push(`/task/${task._id}`);
       }, 3000);
@@ -146,6 +151,7 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
       setShowSuccessModal(true);
       setTimeout(function () {
         setShowFinalizeTaskModal(false);
+        setSuccessMessage("Task has been marked as completed!");
         setShowSuccessModal(false);
         router.push(`/task/${task._id}`);
       }, 3000);
@@ -172,6 +178,8 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
       <div className="flex flex-row w-full">
         <div className="flex flex-row m-4 p-6 justify-between border rounded-lg bg-white w-2/3">
           <div className="flex flex-col items-start w-2/3">
+            {task.canceled && <h1 className="text-xl text-center font-bold w-full">*This task has been canceled*</h1>}
+            {task.complete && <h1 className="text-xl text-center font-bold w-full">*This task has been completed*</h1>}
             <h1 className="text-xl">{task.title}</h1>
             <p>{task.description}</p>
             {task.contactInfo && (
@@ -194,7 +202,7 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
             </span>
             {task.approvedWorker && (
               <span className="text-md">
-                Assigned Worker: <Address address={task.reviewer} />
+                Assigned Worker: <Address address={task.approvedWorker} />
               </span>
             )}
           </div>
@@ -208,34 +216,58 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
             )}
           </div>
           <div className="flex flex-col">
-            <button className="btn btn-primary btn-lg mb-1" onClick={() => setShowFundingModal(true)}>
+            <button
+              className="btn btn-primary btn-lg mb-1"
+              onClick={() => setShowFundingModal(true)}
+              disabled={task.complete || task.canceled}
+            >
               Fund Task
             </button>
             {/* {(address == task.creator || address == task.reviewer) && (
               <button className="btn btn-warning btn-lg my-1">Edit Task</button>
             )} */}
             {address == task.reviewer && (
-              <button className="btn btn-success btn-lg my-1" onClick={() => setShowAssignTaskModal(true)}>
+              <button
+                className="btn btn-success btn-lg my-1"
+                onClick={() => setShowAssignTaskModal(true)}
+                disabled={task.complete || task.canceled}
+              >
                 Assign Task
               </button>
             )}
             {address == task.reviewer && !task.approved && (
-              <button className="btn btn-default btn-lg mt-1" onClick={() => setShowApproveWorkModal(true)}>
+              <button
+                className="btn btn-default btn-lg mt-1"
+                onClick={() => setShowApproveWorkModal(true)}
+                disabled={task.complete || task.canceled}
+              >
                 Approve Work
               </button>
             )}
             {address == task.reviewer && task.approved && (
-              <button className="btn btn-default btn-lg mt-1" onClick={() => setShowFinalizeTaskModal(true)}>
+              <button
+                className="btn btn-default btn-lg mt-1"
+                onClick={() => setShowFinalizeTaskModal(true)}
+                disabled={task.complete || task.canceled}
+              >
                 Mark as Complete
               </button>
             )}
             {address == task.reviewer && (
-              <button className="btn btn-error btn-lg mt-1" onClick={() => setShowCancelTaskModal(true)}>
+              <button
+                className="btn btn-error btn-lg mt-1"
+                onClick={() => setShowCancelTaskModal(true)}
+                disabled={task.complete || task.canceled}
+              >
                 Cancel Task
               </button>
             )}
-            {address != task.reviewer && <button className="btn btn-warning btn-lg my-1">Submit Work</button>}
-            {address != task.reviewer && <button className="btn btn-success btn-lg mt-1">Contact</button>}
+            {/* {address != task.reviewer && (
+              <button className="btn btn-warning btn-lg my-1" disabled={task.complete || task.canceled}>
+                Submit Work
+              </button>
+            )} */}
+            {/* {address != task.reviewer && <button className="btn btn-success btn-lg mt-1">Contact</button>} */}
           </div>
         </div>
         {showFundingModal && (
@@ -291,9 +323,7 @@ const TaskDetail: NextPage<Props> = ({ task }) => {
             confirmWording="Complete Task"
           />
         )}
-        {showSuccessModal && (
-          <SuccessModal onClose={() => setShowSuccessModal(false)} message="You funded this task! Way to go!" />
-        )}
+        {showSuccessModal && <SuccessModal onClose={() => setShowSuccessModal(false)} message={successMessage} />}
       </div>
     </>
   );
