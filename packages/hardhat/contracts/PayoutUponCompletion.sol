@@ -2,7 +2,7 @@
 pragma solidity 0.8.18;
 
 // Use openzeppelin to inherit battle-tested implementations
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
@@ -10,7 +10,7 @@ import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/Saf
  * @dev This contract manages tasks that lead to a payout to a particular address when the work is approved by the approver.
  * @author escottalexander
  */
-contract PayoutUponCompletion is Ownable {
+contract PayoutUponCompletion is Ownable2Step {
 	using SafeERC20 for IERC20;
 
 	struct Task {
@@ -25,14 +25,12 @@ contract PayoutUponCompletion is Ownable {
 
 	// constant variables
 	uint8 constant oneHundred = 100;
-	uint16 constant oneThousand = 1000;
 	uint16 constant tenThousand = 10000;
 
 	// State Variables
-	uint8 public protocolTakeRate; // Percentage that protocol takes from every bounty claim
-	uint8 public maxProtocolTakeRate = 50; // Protocol won't be able to take more than this / 1000 of a bounty - 5% at default level - and this can never be modified upwards
+	uint16 public protocolTakeRateBps; // Percentage that protocol takes from every bounty claim
+	uint16 public maxProtocolTakeRateBps = 500; // Protocol won't be able to take more than this / 10000 of a bounty - 5% at default level - and this can never be modified upwards
 	uint32 public unlockPeriod = 63072000; // Two years in seconds - Anyone can cancel a task after this time period - uint32 maximimum is 136 years
-	address public protocolAddress; // Address that can claim funds that were allocated to protocol
 	uint public currentTaskIndex;
 
 	// Token AllowList Variables
@@ -40,7 +38,7 @@ contract PayoutUponCompletion is Ownable {
 
 	// Token balance mappings
 	mapping(address => mapping(address => uint)) withdrawableFunds; // fundOwner => tokenAddress => amount, can be withdrawn by fundOwner at anytime
-	mapping(address => uint) totalTokenBalance;
+	mapping(address => uint) totalUserTokenBalance;
 
 	// Task specific mappings
 	mapping(uint => Task) public tasks;
@@ -54,7 +52,7 @@ contract PayoutUponCompletion is Ownable {
 		string taskLocation,
 		address reviewer
 	);
-	event TaskFunded(uint indexed index, uint amount, address token);
+	event TaskFunded(uint indexed index, address funder, uint amount, address token);
 	event TaskCanceled(uint indexed index);
 	event TaskApproved(uint indexed index, address worker);
 	event TaskFinalized(uint indexed index);
@@ -68,10 +66,9 @@ contract PayoutUponCompletion is Ownable {
 
 	// Governance Events
 	event AllowListChanged(address token, bool allowed);
-	event TakeRateAdjusted(uint8 takeRate);
-	event MaxTakeRateLowered(uint8 maxTakeRate);
+	event TakeRateAdjusted(uint16 takeRate);
+	event MaxTakeRateLowered(uint16 maxTakeRate);
 	event UnlockPeriodAdjusted(uint32 unlockPeriod);
-	event ProtocolAddressAdjusted(address protocolAddress);
 
 	// Errors
 	error NotAuthorized();
@@ -87,17 +84,12 @@ contract PayoutUponCompletion is Ownable {
 	/**
 	 * @dev Constructor to set the initial protocol take rate and protocol address.
 	 * @param _protocolTakeRate initial rate taken by the protocol.
-	 * @param _protocolAddress initial address of the protocol.
 	 */
-	constructor(uint8 _protocolTakeRate, address _protocolAddress) {
-		if (_protocolTakeRate > maxProtocolTakeRate) {
+	constructor(uint8 _protocolTakeRate) {
+		if (_protocolTakeRate > maxProtocolTakeRateBps) {
 			revert ExceedsLimit();
 		}
-		if (_protocolAddress == address(0)) {
-			revert ZeroAddressNotAllowed();
-		}
-		protocolTakeRate = _protocolTakeRate;
-		protocolAddress = _protocolAddress;
+		protocolTakeRateBps = _protocolTakeRate;
 		// Enable ETH by default
 		isTokenAllowed[address(0)] = true;
 	}
@@ -170,7 +162,7 @@ contract PayoutUponCompletion is Ownable {
 			withdrawableFunds[msg.sender][tokenAddress] -= amount;
 		}
 		// Remove funds from total balance mapping
-		totalTokenBalance[tokenAddress] -= amount;
+		totalUserTokenBalance[tokenAddress] -= amount;
 		if (tokenAddress == address(0)) {
 			// ETH
 			(bool sent, ) = payable(msg.sender).call{ value: amount }("");
@@ -246,9 +238,9 @@ contract PayoutUponCompletion is Ownable {
 			IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 		}
 		// Update State
-		_addFunderAndFunds(taskIndex, amount, token);
+		_addFunds(taskIndex, amount, token);
 
-		emit TaskFunded(taskIndex, amount, token);
+		emit TaskFunded(taskIndex, msg.sender, amount, token);
 	}
 
 	/**
@@ -258,7 +250,7 @@ contract PayoutUponCompletion is Ownable {
 	 * @param amount The amount of funds provided by the funder.
 	 * @param token The address of the token contract for ERC20 withdrawals; use the zero address for ETH withdrawals.
 	 */
-	function _addFunderAndFunds(
+	function _addFunds(
 		uint taskIndex,
 		uint amount,
 		address token
@@ -268,7 +260,7 @@ contract PayoutUponCompletion is Ownable {
 		totalTaskFunding[taskIndex][token] += amount;
 		taskTally[taskIndex] += amount;
 		// Add funds to total balance mapping
-		totalTokenBalance[token] += amount;
+		totalUserTokenBalance[token] += amount;
 	}
 
 	/**
@@ -298,6 +290,9 @@ contract PayoutUponCompletion is Ownable {
 		uint taskIndex,
 		address[][] calldata funderTokenPairs
 	) external {
+		if (currentTaskIndex <= taskIndex) {
+			revert TaskDoesNotExist();
+		}
 		Task storage task = tasks[taskIndex];
 		if (task.complete || task.canceled) {
 			revert TaskInFinalState();
@@ -372,22 +367,23 @@ contract PayoutUponCompletion is Ownable {
 	}
 
 	/**
-	 * @notice Internal utility function to divide an amount by a divisor, while taking into account a factor of ten thousand to prevent loss of precision.
-	 * @dev This function divides `amount` by `divisor` taking into account a basis point calculation to increase precision for small numbers. If an overflow would occur, it falls back to a standard division operation. This function is pure, as it does not read from or modify the state.
-	 * @param amount The quantity to be divided.
-	 * @param divisor The number by which `amount` will be divided. We know this number will never be more than 100 so we don't check it.
-	 * @return result of the division, considering the special basis points division or a standard division, depending on the potential for overflow.
-	 */
-	function _divideWithBasisPoints(
-		uint amount,
-		uint divisor
-	) internal pure returns (uint) {
-		// Check if overflow would occur
-		if (amount > type(uint256).max / tenThousand) {
-			// Number too big to use basis points, just do normal division
-			return amount / divisor;
-		}
-		return (amount * tenThousand) / (divisor * tenThousand);
+	* @notice Internal utility function to divide an amount by a divisor.
+	* @dev This function divides `amount` by `divisor` taking into account a multiplier to increase precision for small numbers.
+	* @param amount The quantity to be divided.
+	* @param multiplier The number by which `amount` will be multiplied by.
+	* @param scale The number by which `amount` will be divided.
+	* @return result of the division, considering the special basis points division or a standard division, depending on the potential for overflow.
+	*/
+	function _divideWithExtraPrecision (
+		uint amount, uint multiplier, uint scale
+	)
+	internal pure returns (uint) {
+		uint a = amount / scale;
+		uint b = amount % scale;
+		uint c = multiplier / scale;
+		uint d = multiplier % scale;
+
+		return a * c * scale + a * d + b * c + b * d / scale;
 	}
 
 	/**
@@ -409,31 +405,28 @@ contract PayoutUponCompletion is Ownable {
 		address worker,
 		uint reviewerPercentage
 	) internal {
-		if (protocolTakeRate > 0) {
-			// Check for overflow before multiplying
-			if (amount < type(uint256).max / protocolTakeRate) {
-				// By dividing by 1000 this allows us to adjust the take rate to be as granular as 0.1%
-				uint protocolShare = _divideWithBasisPoints(
-					amount * protocolTakeRate,
-					oneThousand
-				);
-				withdrawableFunds[protocolAddress][token] += protocolShare;
-				amount = amount - protocolShare;
-			}
+		uint protocolShare;
+		uint reviewerShare;
+		if (protocolTakeRateBps > 0) {
+			// By dividing by 10000 this allows us to adjust the take rate to be as granular as 0.01%
+			protocolShare = _divideWithExtraPrecision(
+				amount, protocolTakeRateBps,
+				tenThousand
+			);
+			// Remove from totalUserTokenBalance so we can remove from contract
+			totalUserTokenBalance[token] -= protocolShare;
 		}
 		if (reviewerPercentage > 0) {
-			// Check for overflow before multiplying
-			if (amount < type(uint256).max / reviewerPercentage) {
-				uint reviewerShare = _divideWithBasisPoints(
-					amount * reviewerPercentage,
-					oneHundred
-				);
-				withdrawableFunds[reviewer][token] += reviewerShare;
-				amount = amount - reviewerShare;
-			}
+			reviewerShare = _divideWithExtraPrecision(
+				amount - protocolShare, reviewerPercentage * oneHundred,
+				tenThousand
+			);
+			// Allocate to reviewer
+			withdrawableFunds[reviewer][token] += reviewerShare;
 		}
-
-		withdrawableFunds[worker][token] += amount;
+		// Allocate remaining to worker
+		uint workerShare = amount - protocolShare - reviewerShare;
+		withdrawableFunds[worker][token] += workerShare;
 	}
 
 	// Reviewer only functions
@@ -503,27 +496,13 @@ contract PayoutUponCompletion is Ownable {
 	 * @notice Retrieves detailed information about a specific task.
 	 * @dev Retrieves a task using the provided index and returns various details about the task.
 	 * @param taskIndex The index of the task to retrieve information for.
-	 * @return reviewer The address of the reviewer assigned to the task.
-	 * @return reviewerPercentage The percentage of funds allocated to the reviewer upon completion.
-	 * @return approvedWorker The address of the worker approved for the task.
-	 * @return creationTime The timestamp representing the creation time of the task.
-	 * @return approved A boolean representing whether the task has been approved.
-	 * @return canceled A boolean representing whether the task has been canceled.
-	 * @return complete A boolean representing whether the task has been completed.
+	 * @return Task The task at that index in the mapping
 	 */
 	function getTask(
 		uint taskIndex
-	) external view returns (address, uint, address, uint8, bool, bool, bool) {
+	) external view returns (Task memory) {
 		Task storage task = tasks[taskIndex];
-		return (
-			task.approvedWorker,
-			task.creationTime,
-			task.reviewer,
-			task.reviewerPercentage,
-			task.approved,
-			task.canceled,
-			task.complete
-		);
+		return task;
 	}
 
 	/**
@@ -581,11 +560,11 @@ contract PayoutUponCompletion is Ownable {
 	 * @dev Can only be called by the contract owner. The new take rate cannot exceed the maximum allowed take rate defined by maxProtocolTakeRate.
 	 * @param takeRate The new take rate to set, represented as a uint8.
 	 */
-	function adjustTakeRate(uint8 takeRate) external onlyOwner {
-		if (takeRate > maxProtocolTakeRate) {
+	function adjustTakeRate(uint16 takeRate) external onlyOwner {
+		if (takeRate > maxProtocolTakeRateBps) {
 			revert ExceedsLimit();
 		}
-		protocolTakeRate = takeRate;
+		protocolTakeRateBps = takeRate;
 
 		emit TakeRateAdjusted(takeRate);
 	}
@@ -595,14 +574,14 @@ contract PayoutUponCompletion is Ownable {
 	 * @dev Can only be called by the contract owner. The new max take rate must not exceed the current max take rate. If the current protocol take rate is higher than the new max take rate, it will be adjusted accordingly.
 	 * @param takeRate The new max take rate to set, represented as a uint8.
 	 */
-	function permanentlyLowerMaxTakeRate(uint8 takeRate) external onlyOwner {
-		if (takeRate > maxProtocolTakeRate) {
+	function permanentlyLowerMaxTakeRate(uint16 takeRate) external onlyOwner {
+		if (takeRate > maxProtocolTakeRateBps) {
 			revert ExceedsLimit();
 		}
-		maxProtocolTakeRate = takeRate;
+		maxProtocolTakeRateBps = takeRate;
 		// If the current protocol take rate is greater than the new max then adjust it too
-		if (protocolTakeRate > takeRate) {
-			protocolTakeRate = takeRate;
+		if (protocolTakeRateBps > takeRate) {
+			protocolTakeRateBps = takeRate;
 			emit TakeRateAdjusted(takeRate);
 		}
 
@@ -621,39 +600,32 @@ contract PayoutUponCompletion is Ownable {
 	}
 
 	/**
-	 * @notice Adjusts the protocol's associated address.
-	 * @dev Can only be called by the contract owner. The new address cannot be the zero address.
-	 * @param _protocolAddress The new address to associate with the protocol. Receives the protocol funds
-	 */
-	function adjustProtocolAddress(
-		address _protocolAddress
-	) external onlyOwner {
-		if (_protocolAddress == address(0)) {
-			revert ZeroAddressNotAllowed();
-		}
-		protocolAddress = _protocolAddress;
-		emit ProtocolAddressAdjusted(_protocolAddress);
-	}
-
-	/**
-	 * @notice Allows the owner to withdraw stuck tokens (ERC-20 or native Ether) from the contract.
-	 * @dev Can only be called by the contract owner. The method calculates the amount of stuck tokens by subtracting the tracked balance from the total balance held by the contract, and transfers this amount to the owner.
+	 * @notice Allows the owner to withdraw protocol tokens (ERC-20 or native Ether) from the contract.
+	 * @dev Can only be called by the contract owner. The method gets protocol tokens by subtracting the tracked user balance from the total balance held by the contract, and transfers this amount to the owner.
 	 * @param tokenAddress The address of the token to withdraw; use the zero address for native Ether.
 	 */
-	function withdrawStuckTokens(address tokenAddress) external onlyOwner {
-		uint trackedBalance = totalTokenBalance[tokenAddress];
+	function withdrawProtocolTokens(address tokenAddress) external onlyOwner {
+		uint trackedBalance = totalUserTokenBalance[tokenAddress];
 		if (tokenAddress == address(0)) {
+			// Compare how much is in contract vs how much is in user balances
 			uint inContract = address(this).balance;
-			uint stuck = inContract - trackedBalance;
-			(bool sent, ) = payable(owner()).call{ value: stuck }("");
-			if (!sent) {
-				revert FailedToSend();
+			uint protocolBalance = inContract - trackedBalance;
+			// The difference is protocol revenue
+			if (protocolBalance > 0) {
+				(bool sent, ) = payable(owner()).call{ value: protocolBalance }("");
+				if (!sent) {
+					revert FailedToSend();
+				}
 			}
 		} else {
 			IERC20 token = IERC20(tokenAddress);
+			// Compare how much is in contract vs how much is in user balances
 			uint inContract = token.balanceOf(address(this));
-			uint stuck = inContract - trackedBalance;
-			token.safeTransfer(owner(), stuck);
+			uint protocolBalance = inContract - trackedBalance;
+			// The difference is protocol revenue
+			if (protocolBalance > 0) {
+				token.safeTransfer(owner(), protocolBalance);
+			}
 		}
 	}
 }
